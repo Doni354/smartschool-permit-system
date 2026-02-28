@@ -1,0 +1,5 @@
+{
+  "name": "SmartSchool Permit System",
+  "description": "A digital permit management system for schools to handle student late entries and exit permissions. Features multi-school support, digital records, and printable official letters.",
+  "requestFramePermissions": []
+}
