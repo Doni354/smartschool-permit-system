@@ -5,39 +5,36 @@ import { ClassPicker } from '../components/ClassPicker';
 import { NameAutocomplete } from '../components/NameAutocomplete';
 import { getTahunAjaran } from '../utils/school';
 import { createPermit, getPermitsBySchool } from '../services/permitService';
-import { Clock, CheckCircle, AlertCircle, ArrowLeft, Send, FileText, Users } from 'lucide-react';
+import { FileText, CheckCircle, AlertCircle, ArrowLeft, Send, Clock, Users } from 'lucide-react';
 
-interface StudentEntryProps {
+interface StudentDispenProps {
   schools: SchoolProfile[];
 }
 
-/** Title Case: "budi santoso" → "Budi Santoso" */
 function toTitleCase(str: string) {
   return str.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
-export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
+export const StudentDispen: React.FC<StudentDispenProps> = ({ schools }) => {
   const selectedSchoolId = schools[0].id;
   const schoolName = schools[0].name;
 
-  const [formData, setFormData] = useState({ studentName: '', className: '', reason: '' });
+  const [formData, setFormData] = useState({ studentName: '', className: '', reason: '', returnTime: '' });
   const [step, setStep] = useState<'form' | 'confirm' | 'submitting' | 'success' | 'error'>('form');
   const [classError, setClassError] = useState(false);
   const [existingNames, setExistingNames] = useState<string[]>([]);
 
-  // Load existing student names for autocomplete
   useEffect(() => {
     getPermitsBySchool(selectedSchoolId)
       .then(permits => {
         const unique = Array.from(new Set(permits.map(p => p.studentName).filter(Boolean)));
         setExistingNames(unique.sort());
       })
-      .catch(() => {}); // silently fail if no access
+      .catch(() => {});
   }, [selectedSchoolId]);
 
   const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Explicit class validation (hidden input required doesn't always fire)
     if (!formData.className) {
       setClassError(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -51,16 +48,22 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
     setStep('submitting');
     try {
       const now = Date.now();
-      await createPermit({
-        type: PermitType.LATE_ENTRY,
+      const returnTimestamp = formData.returnTime
+        ? new Date().setHours(parseInt(formData.returnTime.split(':')[0]), parseInt(formData.returnTime.split(':')[1]), 0, 0)
+        : undefined;
+
+      const createData: any = {
+        type: PermitType.EXIT_PERMIT,
         studentName: formData.studentName.trim(),
         className: formData.className,
         reason: formData.reason.trim(),
         schoolId: selectedSchoolId,
         timestamp: now,
         tahunAjaran: getTahunAjaran(now),
-        arrivalTimestamp: now,
-      });
+      };
+      if (returnTimestamp) createData.returnTimestamp = returnTimestamp;
+
+      await createPermit(createData);
       setStep('success');
     } catch (err) {
       console.error(err);
@@ -69,7 +72,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
   };
 
   const handleReset = () => {
-    setFormData({ studentName: '', className: '', reason: '' });
+    setFormData({ studentName: '', className: '', reason: '', returnTime: '' });
     setClassError(false);
     setStep('form');
   };
@@ -82,20 +85,20 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="bg-blue-600 p-6 text-white text-center">
-          <Clock className="w-12 h-12 mx-auto mb-2 opacity-80" />
-          <h1 className="text-2xl font-bold">Catat Keterlambatan</h1>
-          <p className="text-blue-100 font-medium mt-1">{schoolName}</p>
+        <div className="bg-indigo-600 p-6 text-white text-center">
+          <FileText className="w-12 h-12 mx-auto mb-2 opacity-80" />
+          <h1 className="text-2xl font-bold">Form Dispensasi</h1>
+          <p className="text-indigo-200 font-medium mt-1">{schoolName}</p>
         </div>
 
         <div className="p-6">
           {step === 'success' ? (
             <div className="text-center py-8 animate-fade-in">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-slate-800">Data Tersimpan!</h2>
-              <p className="text-slate-600 mb-8">Silakan lapor ke guru piket untuk cetak surat.</p>
-              <button onClick={handleReset} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
-                Isi Form Lagi
+              <h2 className="text-xl font-bold text-slate-800">Pengajuan Terkirim!</h2>
+              <p className="text-slate-600 mb-8">Dispensasi Anda telah tercatat. Silakan tunggu persetujuan dari guru piket.</p>
+              <button onClick={handleReset} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-all">
+                Ajukan Lagi
               </button>
             </div>
           ) : step === 'confirm' ? (
@@ -112,6 +115,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                   { label: 'Nama Lengkap', value: formData.studentName },
                   { label: 'Kelas', value: formData.className },
                   { label: 'Alasan', value: formData.reason },
+                  { label: 'Rencana Kembali', value: formData.returnTime || 'Tidak ditentukan' },
                 ].map(row => (
                   <div key={row.label}>
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">{row.label}</span>
@@ -126,15 +130,13 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                   <ArrowLeft size={18} /> Kembali
                 </button>
                 <button onClick={handleFinalSubmit} disabled={step === 'submitting' as any}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
-                  Sesuai, Kirim <Send size={18} />
+                  className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-all">
+                  Kirim <Send size={18} />
                 </button>
               </div>
             </div>
           ) : (
             <form onSubmit={handleInitialSubmit} className="space-y-5">
-
-              {/* Name input with autocomplete + auto-capitalize */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   Nama Lengkap <span className="text-red-500">*</span>
@@ -150,7 +152,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                 <p className="text-xs text-slate-400 mt-1.5">Nama otomatis diformat Huruf Besar di Awal saat selesai mengetik.</p>
               </div>
 
-              {/* Class picker with validation */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Kelas <span className="text-red-500">*</span>
@@ -168,31 +169,42 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                 )}
               </div>
 
-              {/* Reason */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                  Alasan Terlambat <span className="text-red-500">*</span>
+                  Alasan Dispensasi <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  required
-                  rows={3}
-                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-slate-900 resize-none transition-all"
-                  placeholder="Contoh: Ban bocor, Bangun kesiangan, Macet..."
+                  required rows={3}
+                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 resize-none transition-all"
+                  placeholder="Contoh: Sakit perlu pulang, Acara keluarga, dll..."
                   value={formData.reason}
                   onChange={e => setFormData({ ...formData, reason: e.target.value })}
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Rencana Kembali <span className="font-normal text-slate-400">(Opsional)</span>
+                </label>
+                <input
+                  type="time"
+                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white text-slate-900 transition-all"
+                  value={formData.returnTime}
+                  onChange={e => setFormData({ ...formData, returnTime: e.target.value })}
+                />
+                <p className="text-xs text-slate-400 mt-1">Biarkan kosong jika tidak berencana kembali hari ini.</p>
+              </div>
+
               {step === 'error' && (
                 <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
                   <AlertCircle size={18} />
-                  <span>Gagal menyimpan data. Coba lagi.</span>
+                  <span>Gagal mengirim data. Coba lagi.</span>
                 </div>
               )}
 
               <button
                 type="submit"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-blue-600/30"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-indigo-600/30"
               >
                 Lanjut →
               </button>
@@ -201,8 +213,8 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
         </div>
         <div className="bg-slate-50 p-4 space-y-3">
           <div className="flex gap-2">
-            <Link to="/dispen" className="flex-1 flex items-center justify-center gap-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-semibold text-xs py-2.5 rounded-lg transition-all">
-              <FileText size={14} /> Form Dispensasi
+            <Link to="/" className="flex-1 flex items-center justify-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-700 font-semibold text-xs py-2.5 rounded-lg transition-all">
+              <Clock size={14} /> Catat Terlambat
             </Link>
             <Link to="/rekap-siswa" className="flex-1 flex items-center justify-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-xs py-2.5 rounded-lg transition-all">
               <Users size={14} /> Rekap Siswa

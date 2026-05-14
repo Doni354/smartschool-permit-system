@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, DEMO_SCHOOLS } from './types';
 import { StudentEntry } from './pages/StudentEntry';
+import { StudentDispen } from './pages/StudentDispen';
+import { StudentRecords } from './pages/StudentRecords';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { PrintPreviewPage } from './pages/PrintPreviewPage';
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase';
@@ -139,6 +141,12 @@ const App: React.FC = () => {
       <Routes>
         {/* Public: Student late-entry form */}
         <Route path="/" element={<StudentEntry schools={DEMO_SCHOOLS} />} />
+
+        {/* Public: Student self-service dispensasi form */}
+        <Route path="/dispen" element={<StudentDispen schools={DEMO_SCHOOLS} />} />
+
+        {/* Public: Student records / rekap */}
+        <Route path="/rekap-siswa" element={<StudentRecords schools={DEMO_SCHOOLS} />} />
 
         {/* Login page */}
         <Route

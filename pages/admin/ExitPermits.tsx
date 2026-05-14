@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { StudentPermit, PermitType } from '../../types';
-import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, FilePlus, AlertCircle, ChevronDown } from 'lucide-react';
+import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, FilePlus, AlertCircle, ChevronDown, Download, Clock } from 'lucide-react';
 import { getTahunAjaran, getAvailableTahunAjaran, GRADES, GRADE_LETTERS } from '../../utils/school';
+import { exportPermitsToXlsx } from '../../utils/xlsx-export';
+import { Pagination } from '../../components/Pagination';
 
 interface ExitPermitsProps {
   permits: StudentPermit[];
@@ -65,6 +67,11 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
   const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setSelectedTA(''); };
   const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || selectedTA;
 
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA]);
+  const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page, perPage]);
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Filter Bar */}
@@ -85,6 +92,16 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
           {hasFilter && (
             <button onClick={clearFilters} className="flex items-center gap-1 px-3 py-2 text-sm text-red-500 hover:bg-red-50 border border-slate-200 rounded-lg transition-all shrink-0">
               <X size={14} />
+            </button>
+          )}
+          {filtered.length > 0 && (
+            <button
+              onClick={() => exportPermitsToXlsx(filtered, `data-izin-keluar-${new Date().toISOString().slice(0,10)}`)}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all shrink-0"
+              title="Ekspor ke Excel"
+            >
+              <Download size={15} />
+              <span className="hidden sm:inline">Ekspor</span>
             </button>
           )}
           <button onClick={onCreateNew}
@@ -155,6 +172,47 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
         </div>
       </div>
 
+      {/* === TODAY section === */}
+      {!loading && (() => {
+        const today = new Date().toDateString();
+        const todayEntries = exitPermits.filter(p => new Date(p.timestamp).toDateString() === today);
+        if (todayEntries.length === 0) return null;
+        return (
+          <div className="bg-blue-50 rounded-2xl border border-blue-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-blue-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-blue-600" />
+                <h3 className="font-bold text-blue-800 text-sm">Izin Keluar Hari Ini</h3>
+                <span className="bg-blue-200 text-blue-800 text-xs font-bold px-2 py-0.5 rounded-full">{todayEntries.length}</span>
+              </div>
+              <span className="text-xs text-blue-600">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+            </div>
+            <div className="divide-y divide-blue-100">
+              {todayEntries.map(permit => (
+                <div key={permit.id} className="px-4 py-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center text-blue-800 font-bold text-xs shrink-0">{getInitials(permit.studentName)}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800 text-sm truncate">{permit.studentName}</p>
+                    <p className="text-xs text-slate-500">
+                      <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">{permit.className}</span>
+                      <span className="ml-2 text-slate-400">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => onPrint(permit)} className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-lg transition-colors" title="Cetak">
+                      <Printer size={17} />
+                    </button>
+                    <button onClick={() => onEdit(permit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="Edit">
+                      <Pencil size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Content */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-3">
@@ -171,7 +229,7 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
         <>
           {/* Mobile Cards */}
           <div className="sm:hidden space-y-3">
-            {filtered.map(permit => (
+            {paginated.map(permit => (
               <div key={permit.id} className="bg-white rounded-xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
@@ -227,7 +285,7 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map(permit => (
+                  {paginated.map(permit => (
                     <tr key={permit.id} className="hover:bg-slate-50 transition-colors group">
                       <td className="p-4 pl-5">
                         <div className="flex items-center gap-3">
@@ -262,6 +320,7 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
               </table>
             </div>
           </div>
+          <Pagination total={filtered.length} page={page} perPage={perPage} onPageChange={setPage} onPerPageChange={setPerPage} />
         </>
       )}
     </div>

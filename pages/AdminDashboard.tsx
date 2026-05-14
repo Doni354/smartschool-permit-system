@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProfile, User, StudentPermit, PermitType } from '../types';
 import { Sidebar } from '../components/Sidebar';
 import { ClassPicker } from '../components/ClassPicker';
+import { NameAutocomplete } from '../components/NameAutocomplete';
 import { DashboardHome } from './admin/DashboardHome';
 import { LateEntries } from './admin/LateEntries';
 import { ExitPermits } from './admin/ExitPermits';
@@ -29,11 +30,12 @@ const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 
 
 
 // Create/Edit Modal (responsive)
-const PermitModal = ({ permit, onClose, onSave, isLoading }: {
+const PermitModal = ({ permit, onClose, onSave, isLoading, existingNames }: {
   permit: StudentPermit | null;
   onClose: () => void;
   onSave: (data: any, isEdit: boolean) => void;
   isLoading: boolean;
+  existingNames: string[];
 }) => {
   const [form, setForm] = useState({
     studentName: permit?.studentName || '',
@@ -76,11 +78,14 @@ const PermitModal = ({ permit, onClose, onSave, isLoading }: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold mb-1.5 text-slate-700">Nama Siswa</label>
-              <input required type="text" placeholder="Nama Lengkap"
-                className="w-full border border-slate-300 px-3 py-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+              <NameAutocomplete
                 value={form.studentName}
-                onChange={e => setForm({ ...form, studentName: e.target.value })}
-                onBlur={e => setForm({ ...form, studentName: toTitleCase(e.target.value.trim()) })} />
+                onChange={val => setForm({ ...form, studentName: val })}
+                onBlur={() => setForm(f => ({ ...f, studentName: toTitleCase(f.studentName.trim()) }))}
+                suggestions={existingNames}
+                placeholder="Ketik nama lengkap..."
+                required
+              />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1.5 text-slate-700">Kelas</label>
@@ -162,6 +167,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
 
   // Close sidebar on route change (mobile)
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+
+  const existingNames = useMemo(() => {
+    const unique = Array.from(new Set(permits.map(p => p.studentName).filter(Boolean)));
+    return unique.sort();
+  }, [permits]);
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setNotification({ msg, type });
@@ -294,6 +304,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
           onClose={() => setModalPermit(null)}
           onSave={handleSave}
           isLoading={saving}
+          existingNames={existingNames}
         />
       )}
     </div>

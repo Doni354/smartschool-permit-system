@@ -1,6 +1,7 @@
-import React from 'react';
-import { Clock, LogOut, FileText, LayoutDashboard, AlertCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Clock, LogOut, FileText, LayoutDashboard, AlertCircle, TrendingUp, Users, ChevronDown } from 'lucide-react';
 import { StudentPermit, PermitType } from '../../types';
+import { GRADES, GRADE_LETTERS } from '../../utils/school';
 
 interface DashboardHomeProps {
   permits: StudentPermit[];
@@ -23,17 +24,19 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 }
 
+const DAYS_ID = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
 const StatCard = ({ title, value, icon: Icon, colorClass, subtitle, onClick }: any) => (
   <div
     onClick={onClick}
-    className={`p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden bg-white group transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5`}
+    className={`p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden bg-white group transition-all cursor-pointer hover:shadow-md hover:-translate-y-0.5`}
   >
     <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${colorClass}`}>
       <Icon size={64} />
     </div>
     <div className="relative z-10">
-      <p className="text-slate-500 font-medium text-sm mb-1">{title}</p>
-      <h3 className="text-3xl font-bold text-slate-800">{value}</h3>
+      <p className="text-slate-500 font-medium text-xs sm:text-sm mb-1">{title}</p>
+      <h3 className="text-2xl sm:text-3xl font-bold text-slate-800">{value}</h3>
       {subtitle && <p className="text-xs text-slate-400 mt-2">{subtitle}</p>}
     </div>
   </div>
@@ -47,35 +50,215 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, 
 
   const recent = [...permits].sort((a, b) => b.timestamp - a.timestamp).slice(0, 7);
 
+  // --- Daily trend (last 7 days) ---
+  const dailyTrend = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - i));
+      const dateStr = d.toDateString();
+      const dayName = DAYS_ID[d.getDay()];
+      const dateLabel = `${d.getDate()}/${d.getMonth() + 1}`;
+      const late = permits.filter(p => p.type === PermitType.LATE_ENTRY && new Date(p.timestamp).toDateString() === dateStr).length;
+      const exit = permits.filter(p => p.type === PermitType.EXIT_PERMIT && new Date(p.timestamp).toDateString() === dateStr).length;
+      return { dayName, dateLabel, late, exit, total: late + exit };
+    });
+  }, [permits]);
+
+  const maxDaily = Math.max(...dailyTrend.map(d => d.total), 1);
+
+  // --- This month recap ---
+  const now = new Date();
+  const thisMonthPermits = useMemo(() =>
+    permits.filter(p => {
+      const d = new Date(p.timestamp);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }), [permits]);
+
+  const monthLate = thisMonthPermits.filter(p => p.type === PermitType.LATE_ENTRY).length;
+  const monthExit = thisMonthPermits.filter(p => p.type === PermitType.EXIT_PERMIT).length;
+
+  // Per-class this month
+  const [monthGradeFilter, setMonthGradeFilter] = useState('');
+  const classBreakdownMonth = useMemo(() => {
+    const data = monthGradeFilter
+      ? thisMonthPermits.filter(p => p.className.startsWith(monthGradeFilter + '-'))
+      : thisMonthPermits;
+    const map: Record<string, { late: number; exit: number }> = {};
+    for (const p of data) {
+      const cls = p.className?.trim();
+      if (!cls) continue;
+      if (!map[cls]) map[cls] = { late: 0, exit: 0 };
+      if (p.type === PermitType.LATE_ENTRY) map[cls].late++;
+      else map[cls].exit++;
+    }
+    return Object.entries(map)
+      .map(([cls, v]) => ({ cls, ...v, total: v.late + v.exit }))
+      .sort((a, b) => b.total - a.total);
+  }, [thisMonthPermits, monthGradeFilter]);
+
+  // Top students this month
+  const topStudentsMonth = useMemo(() => {
+    const map: Record<string, { name: string; className: string; count: number; late: number; exit: number }> = {};
+    for (const p of thisMonthPermits) {
+      const key = p.studentName.toLowerCase().trim();
+      if (!map[key]) map[key] = { name: p.studentName, className: p.className, count: 0, late: 0, exit: 0 };
+      map[key].count++;
+      if (p.type === PermitType.LATE_ENTRY) map[key].late++;
+      else map[key].exit++;
+    }
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [thisMonthPermits]);
+
+  const maxClassMonth = Math.max(...classBreakdownMonth.map(c => c.total), 1);
+  const monthName = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Stat Cards — 2 col mobile, 3 col desktop */}
+    <div className="space-y-6 sm:space-y-8 animate-fade-in">
+      {/* Stat Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
-        <StatCard
-          title="Terlambat Hari Ini"
-          value={loading ? '...' : todayLate}
-          icon={Clock}
-          colorClass="text-amber-500"
-          subtitle="Siswa terlambat"
-          onClick={() => onViewAll('/admin/late')}
-        />
-        <StatCard
-          title="Izin Keluar Hari Ini"
-          value={loading ? '...' : todayExit}
-          icon={LogOut}
-          colorClass="text-blue-500"
-          subtitle="Surat diterbitkan"
-          onClick={() => onViewAll('/admin/exit')}
-        />
-        <StatCard
-          title="Total Riwayat"
-          value={loading ? '...' : totalEntries}
-          icon={FileText}
-          colorClass="text-indigo-500"
-          subtitle="Semua data"
-          onClick={() => onViewAll('/admin/reports')}
-          className="col-span-2 md:col-span-1"
-        />
+        <StatCard title="Terlambat Hari Ini" value={loading ? '...' : todayLate} icon={Clock} colorClass="text-amber-500" subtitle="Siswa terlambat" onClick={() => onViewAll('/admin/late')} />
+        <StatCard title="Izin Keluar Hari Ini" value={loading ? '...' : todayExit} icon={LogOut} colorClass="text-blue-500" subtitle="Surat diterbitkan" onClick={() => onViewAll('/admin/exit')} />
+        <StatCard title="Total Riwayat" value={loading ? '...' : totalEntries} icon={FileText} colorClass="text-indigo-500" subtitle="Semua data" onClick={() => onViewAll('/admin/reports')} />
+      </div>
+
+      {/* Daily Trend Chart */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center gap-2">
+          <TrendingUp size={18} className="text-indigo-500" />
+          <h3 className="font-bold text-slate-800">Tren 7 Hari Terakhir</h3>
+        </div>
+        <div className="p-4 sm:p-5">
+          <div className="flex items-end gap-1.5 sm:gap-3 h-36 sm:h-44 mb-2">
+            {dailyTrend.map((d, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                {d.total > 0 && <span className="text-xs font-bold text-slate-600">{d.total}</span>}
+                <div className="w-full flex flex-col justify-end rounded-t-lg overflow-hidden" style={{ height: '120px' }}>
+                  {d.exit > 0 && (
+                    <div
+                      style={{ height: `${(d.exit / maxDaily) * 100}%` }}
+                      className="w-full bg-blue-400 transition-all duration-500"
+                      title={`${d.exit} izin keluar`}
+                    />
+                  )}
+                  {d.late > 0 && (
+                    <div
+                      style={{ height: `${(d.late / maxDaily) * 100}%` }}
+                      className="w-full bg-amber-400 transition-all duration-500"
+                      title={`${d.late} terlambat`}
+                    />
+                  )}
+                  {d.total === 0 && (
+                    <div className="w-full bg-slate-100 h-1 rounded-full mt-auto" />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-1.5 sm:gap-3">
+            {dailyTrend.map((d, i) => (
+              <div key={i} className="flex-1 text-center">
+                <p className="text-xs font-semibold text-slate-600">{d.dayName}</p>
+                <p className="text-[10px] text-slate-400">{d.dateLabel}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block" /> Terlambat</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-400 inline-block" /> Izin Keluar</span>
+          </div>
+        </div>
+      </div>
+
+      {/* This Month Recap */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users size={18} className="text-emerald-500" />
+            <h3 className="font-bold text-slate-800">Rekap Bulan Ini</h3>
+            <span className="text-xs text-slate-400">— {monthName}</span>
+          </div>
+        </div>
+
+        {/* Summary numbers */}
+        <div className="grid grid-cols-3 gap-3 p-4 sm:p-5 border-b border-slate-100">
+          <div className="bg-amber-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-amber-600 font-medium mb-1">Terlambat</p>
+            <p className="text-xl sm:text-2xl font-bold text-amber-700">{loading ? '...' : monthLate}</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-blue-600 font-medium mb-1">Dispen</p>
+            <p className="text-xl sm:text-2xl font-bold text-blue-700">{loading ? '...' : monthExit}</p>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-slate-500 font-medium mb-1">Total</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-800">{loading ? '...' : monthLate + monthExit}</p>
+          </div>
+        </div>
+
+        {/* Per class with grade filter */}
+        <div className="p-4 sm:p-5 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700">Per Kelas:</span>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button onClick={() => setMonthGradeFilter('')}
+                className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all ${monthGradeFilter === '' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+              {GRADES.map(g => (
+                <button key={g} onClick={() => setMonthGradeFilter(g)}
+                  className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all ${monthGradeFilter === g ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>{g}</button>
+              ))}
+            </div>
+          </div>
+
+          {classBreakdownMonth.length === 0 ? (
+            <p className="text-center text-slate-400 text-sm py-4">Tidak ada data bulan ini.</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {classBreakdownMonth.map(c => (
+                <div key={c.cls}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm font-bold text-slate-700">{c.cls}</span>
+                    <span className="text-xs text-slate-400">{c.total}</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                    <div style={{ width: `${(c.late / maxClassMonth) * 100}%` }} className="h-full bg-amber-400 transition-all" />
+                    <div style={{ width: `${(c.exit / maxClassMonth) * 100}%` }} className="h-full bg-blue-400 transition-all" />
+                  </div>
+                  <div className="flex gap-3 mt-0.5">
+                    <span className="text-xs text-amber-600">{c.late} telat</span>
+                    <span className="text-xs text-blue-600">{c.exit} dispen</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top students this month */}
+        {topStudentsMonth.length > 0 && (
+          <div className="border-t border-slate-100">
+            <div className="p-4 sm:p-5">
+              <h4 className="text-sm font-bold text-slate-700 mb-3">Top Siswa Bulan Ini</h4>
+              <div className="space-y-2">
+                {topStudentsMonth.map((s, i) => (
+                  <div key={s.name + i} className="flex items-center gap-3">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-slate-300 text-slate-700' : 'bg-slate-100 text-slate-500'
+                    }`}>{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
+                      <p className="text-xs text-slate-400">{s.className}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs shrink-0">
+                      <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">{s.late}T</span>
+                      <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">{s.exit}K</span>
+                      <span className="font-bold text-slate-700">{s.count}×</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent Activity */}

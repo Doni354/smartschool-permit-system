@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { StudentPermit, PermitType } from '../../types';
-import { Award, Users, BarChart2, TrendingUp, AlertCircle, ChevronDown, Search, AlertTriangle } from 'lucide-react';
+import { Award, Users, BarChart2, TrendingUp, AlertCircle, ChevronDown, Search, AlertTriangle, Download, Calendar } from 'lucide-react';
 import { getTahunAjaran, getAvailableTahunAjaran, ALL_CLASSES, GRADES, GRADE_LETTERS } from '../../utils/school';
+import { exportPermitsToXlsx, exportSummaryToXlsx } from '../../utils/xlsx-export';
+import { Pagination } from '../../components/Pagination';
 
 interface ReportsProps {
   permits: StudentPermit[];
@@ -16,6 +18,208 @@ const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep'
 function resolveTahunAjaran(p: StudentPermit) {
   return p.tahunAjaran || getTahunAjaran(p.timestamp);
 }
+
+// --- Monthly Rekapitulasi Sub-Component ---
+const MonthlyRecap: React.FC<{ permits: StudentPermit[]; selectedTA: string }> = ({ permits, selectedTA }) => {
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [recapGrade, setRecapGrade] = useState('');
+  const [recapLetter, setRecapLetter] = useState('');
+
+  const handleRecapGrade = (g: string) => { setRecapGrade(g); setRecapLetter(''); };
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    set.add(`${now.getFullYear()}-${now.getMonth()}`);
+    permits.forEach(p => {
+      const d = new Date(p.timestamp);
+      set.add(`${d.getFullYear()}-${d.getMonth()}`);
+    });
+    return Array.from(set)
+      .map(s => { const [y, m] = s.split('-').map(Number); return { year: y, month: m }; })
+      .sort((a, b) => b.year - a.year || b.month - a.month);
+  }, [permits]);
+
+  const monthPermits = useMemo(() =>
+    permits.filter(p => {
+      const d = new Date(p.timestamp);
+      return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+    }), [permits, selectedMonth, selectedYear]);
+
+  // Apply class filter to month permits
+  const filteredMonthPermits = useMemo(() => {
+    let data = monthPermits;
+    if (recapGrade && recapLetter) data = data.filter(p => p.className === `${recapGrade}-${recapLetter}`);
+    else if (recapGrade) data = data.filter(p => p.className?.startsWith(recapGrade + '-'));
+    return data;
+  }, [monthPermits, recapGrade, recapLetter]);
+
+  const monthLate = filteredMonthPermits.filter(p => p.type === PermitType.LATE_ENTRY).length;
+  const monthExit = filteredMonthPermits.filter(p => p.type === PermitType.EXIT_PERMIT).length;
+
+  const classData = useMemo(() => {
+    const map: Record<string, { late: number; exit: number }> = {};
+    for (const p of filteredMonthPermits) {
+      const cls = p.className?.trim();
+      if (!cls) continue;
+      if (!map[cls]) map[cls] = { late: 0, exit: 0 };
+      if (p.type === PermitType.LATE_ENTRY) map[cls].late++;
+      else map[cls].exit++;
+    }
+    return Object.entries(map)
+      .map(([cls, v]) => ({ cls, ...v, total: v.late + v.exit }))
+      .sort((a, b) => b.total - a.total);
+  }, [filteredMonthPermits]);
+
+  const studentData = useMemo(() => {
+    const map: Record<string, { name: string; className: string; late: number; exit: number }> = {};
+    for (const p of filteredMonthPermits) {
+      const key = p.studentName.toLowerCase().trim();
+      if (!map[key]) map[key] = { name: p.studentName, className: p.className, late: 0, exit: 0 };
+      if (p.type === PermitType.LATE_ENTRY) map[key].late++;
+      else map[key].exit++;
+    }
+    return Object.values(map)
+      .map(s => ({ ...s, total: s.late + s.exit }))
+      .sort((a, b) => b.total - a.total);
+  }, [filteredMonthPermits]);
+
+  const maxClass = Math.max(...classData.map(c => c.total), 1);
+  const monthLabel = new Date(selectedYear, selectedMonth).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Calendar size={18} className="text-emerald-500" />
+          <h3 className="font-bold text-slate-800">Rekapitulasi Per Bulan</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <select
+              className="appearance-none bg-slate-100 rounded-lg pl-3 pr-8 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+              value={`${selectedYear}-${selectedMonth}`}
+              onChange={e => {
+                const [y, m] = e.target.value.split('-').map(Number);
+                setSelectedYear(y);
+                setSelectedMonth(m);
+              }}
+            >
+              {availableMonths.map(m => (
+                <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                  {new Date(m.year, m.month).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+          {filteredMonthPermits.length > 0 && (
+            <button
+              onClick={() => exportPermitsToXlsx(filteredMonthPermits, `rekap-${monthLabel.replace(' ', '-')}`)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all"
+            >
+              <Download size={13} />
+              <span className="hidden sm:inline">Ekspor</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Grade filter for recap */}
+      <div className="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-slate-500">Kelas:</span>
+        <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+          <button onClick={() => handleRecapGrade('')}
+            className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all ${recapGrade === '' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+          {GRADES.map(g => (
+            <button key={g} onClick={() => handleRecapGrade(g)}
+              className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all ${recapGrade === g ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>{g}</button>
+          ))}
+        </div>
+        {recapGrade && (
+          <>
+            <span className="text-slate-300">|</span>
+            <button onClick={() => setRecapLetter('')}
+              className={`px-2.5 py-1 text-xs rounded-md font-semibold border transition-all ${recapLetter === '' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}>
+              Semua {recapGrade}
+            </button>
+            {GRADE_LETTERS[recapGrade].map(l => (
+              <button key={l} onClick={() => setRecapLetter(l)}
+                className={`w-7 h-7 text-xs rounded-md font-bold border transition-all ${recapLetter === l ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300'}`}>{l}</button>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3 p-4 border-b border-slate-100">
+        <div className="bg-amber-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-amber-600 font-medium mb-1">Terlambat</p>
+          <p className="text-xl font-bold text-amber-700">{monthLate}</p>
+        </div>
+        <div className="bg-blue-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-blue-600 font-medium mb-1">Dispen</p>
+          <p className="text-xl font-bold text-blue-700">{monthExit}</p>
+        </div>
+        <div className="bg-slate-50 rounded-xl p-3 text-center">
+          <p className="text-xs text-slate-500 font-medium mb-1">Total</p>
+          <p className="text-xl font-bold text-slate-800">{monthLate + monthExit}</p>
+        </div>
+      </div>
+
+      {filteredMonthPermits.length === 0 ? (
+        <div className="p-8 text-center text-slate-400 text-sm">Tidak ada data untuk bulan ini{recapGrade ? ` kelas ${recapGrade}${recapLetter ? `-${recapLetter}` : ''}` : ''}.</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+          {/* Per Class */}
+          <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
+            <h4 className="text-sm font-bold text-slate-700 mb-2">Per Kelas</h4>
+            {classData.map(c => (
+              <div key={c.cls}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm font-bold text-slate-700">{c.cls}</span>
+                  <span className="text-xs text-slate-400">{c.total}</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                  <div style={{ width: `${(c.late / maxClass) * 100}%` }} className="h-full bg-amber-400" />
+                  <div style={{ width: `${(c.exit / maxClass) * 100}%` }} className="h-full bg-blue-400" />
+                </div>
+                <div className="flex gap-3 mt-0.5">
+                  <span className="text-xs text-amber-600">{c.late} telat</span>
+                  <span className="text-xs text-blue-600">{c.exit} dispen</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per Student */}
+          <div className="p-4 max-h-80 overflow-y-auto">
+            <h4 className="text-sm font-bold text-slate-700 mb-2">Per Siswa</h4>
+            <div className="space-y-2">
+              {studentData.slice(0, 15).map((s, i) => (
+                <div key={s.name + i} className="flex items-center gap-2">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                    i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-slate-300 text-slate-700' : i === 2 ? 'bg-orange-300 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}>{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
+                    <p className="text-xs text-slate-400">{s.className}</p>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs shrink-0">
+                    <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">{s.late}T</span>
+                    <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">{s.exit}K</span>
+                    <span className="font-bold text-slate-700">{s.total}×</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
   const currentTA = getTahunAjaran(Date.now());
@@ -132,6 +336,12 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
     else { setSortKey(key); setSortAsc(false); }
   };
 
+  // Pagination for student table
+  const [studentPage, setStudentPage] = useState(1);
+  const [studentPerPage, setStudentPerPage] = useState(10);
+  useEffect(() => { setStudentPage(1); }, [nameSearch, sortKey, sortAsc]);
+  const paginatedStudents = useMemo(() => allStudents.slice((studentPage - 1) * studentPerPage, studentPage * studentPerPage), [allStudents, studentPage, studentPerPage]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400 flex-col gap-3">
@@ -193,7 +403,19 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
           </div>
         )}
 
-        <span className="text-xs text-slate-400 ml-auto">{taPermits.length} data di TA {selectedTA}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">{taPermits.length} data di TA {selectedTA}</span>
+          {taPermits.length > 0 && (
+            <button
+              onClick={() => exportPermitsToXlsx(taPermits, `laporan-TA-${selectedTA.replace('/', '-')}`)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all"
+              title="Ekspor ke Excel"
+            >
+              <Download size={13} />
+              <span className="hidden sm:inline">Ekspor XLSX</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {taPermits.length === 0 ? (
@@ -329,6 +551,9 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
         </>
       )}
 
+      {/* ===== Monthly Rekapitulasi Section ===== */}
+      <MonthlyRecap permits={taPermits} selectedTA={selectedTA} />
+
       {/* ===== Full Student Data Table (always visible, ALL permits) ===== */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
@@ -342,11 +567,23 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
               </span>
             )}
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input type="text" placeholder="Cari nama atau kelas..."
-              value={nameSearch} onChange={e => setNameSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input type="text" placeholder="Cari nama atau kelas..."
+                value={nameSearch} onChange={e => setNameSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+            </div>
+            {allStudents.length > 0 && (
+              <button
+                onClick={() => exportSummaryToXlsx(allStudents, `rekap-semua-siswa-${new Date().toISOString().slice(0,10)}`)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all shrink-0"
+                title="Ekspor ke Excel"
+              >
+                <Download size={15} />
+                <span className="hidden sm:inline">Ekspor</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -375,9 +612,9 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
             <tbody className="divide-y divide-slate-50">
               {allStudents.length === 0 ? (
                 <tr><td colSpan={7} className="p-8 text-center text-slate-400 text-sm">Tidak ada data.</td></tr>
-              ) : allStudents.map((s, i) => (
+              ) : paginatedStudents.map((s, i) => (
                 <tr key={s.name + s.className + i} className={`hover:bg-slate-50 transition-colors ${!s.className ? 'bg-red-50/60 hover:bg-red-50' : ''}`}>
-                  <td className="p-3 pl-5 text-slate-400 text-xs">{i + 1}</td>
+                  <td className="p-3 pl-5 text-slate-400 text-xs">{(studentPage - 1) * studentPerPage + i + 1}</td>
                   <td className="p-3 font-semibold text-slate-800">{s.name}</td>
                   <td className="p-3">
                     {s.className
@@ -405,7 +642,7 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
         <div className="sm:hidden divide-y divide-slate-50">
           {allStudents.length === 0 ? (
             <p className="p-8 text-center text-slate-400 text-sm">Tidak ada data.</p>
-          ) : allStudents.map((s, i) => (
+          ) : paginatedStudents.map((s, i) => (
             <div key={s.name + s.className + i} className={`p-4 ${!s.className ? 'bg-red-50/60' : ''}`}>
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <span className="font-semibold text-slate-800 text-sm">{s.name}</span>
@@ -430,6 +667,7 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
               Pergi ke <strong>Siswa Terlambat</strong> atau <strong>Izin Keluar</strong> → cari nama → klik ✏️ Edit untuk memperbaiki.</span>
           </div>
         )}
+        <Pagination total={allStudents.length} page={studentPage} perPage={studentPerPage} onPageChange={setStudentPage} onPerPageChange={setStudentPerPage} />
       </div>
     </div>
   );
