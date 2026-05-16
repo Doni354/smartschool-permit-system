@@ -6,6 +6,7 @@ import { NameAutocomplete } from '../components/NameAutocomplete';
 import { getTahunAjaran } from '../utils/school';
 import { createPermit, getPermitsBySchool } from '../services/permitService';
 import { FileText, CheckCircle, AlertCircle, ArrowLeft, Send, Clock, Users } from 'lucide-react';
+import { VersionFooter } from '../components/VersionFooter';
 
 interface StudentDispenProps {
   schools: SchoolProfile[];
@@ -220,7 +221,7 @@ export const StudentDispen: React.FC<StudentDispenProps> = ({ schools }) => {
               <Users size={14} /> Rekap Siswa
             </Link>
           </div>
-          <p className="text-center text-xs text-slate-400">SmartSchool System v1.0 &copy; 2026</p>
+          <VersionFooter />
         </div>
       </div>
     </div>

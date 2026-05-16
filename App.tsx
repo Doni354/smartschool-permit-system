@@ -4,6 +4,8 @@ import { User, DEMO_SCHOOLS } from './types';
 import { StudentEntry } from './pages/StudentEntry';
 import { StudentDispen } from './pages/StudentDispen';
 import { StudentRecords } from './pages/StudentRecords';
+import { ChangelogPage } from './pages/ChangelogPage';
+import { GuidePage } from './pages/GuidePage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { PrintPreviewPage } from './pages/PrintPreviewPage';
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase';
@@ -147,6 +149,12 @@ const App: React.FC = () => {
 
         {/* Public: Student records / rekap */}
         <Route path="/rekap-siswa" element={<StudentRecords schools={DEMO_SCHOOLS} />} />
+
+        {/* Public: Changelog */}
+        <Route path="/changelog" element={<ChangelogPage />} />
+
+        {/* Public: Guide / Panduan */}
+        <Route path="/panduan" element={<GuidePage />} />
 
         {/* Login page */}
         <Route

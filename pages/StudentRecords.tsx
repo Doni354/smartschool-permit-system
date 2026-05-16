@@ -5,6 +5,7 @@ import { GRADES, GRADE_LETTERS } from '../utils/school';
 import { Search, Users, Clock, AlertCircle, ChevronDown, FileText, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Pagination } from '../components/Pagination';
+import { VersionFooter } from '../components/VersionFooter';
 
 interface StudentRecordsProps {
   schools: SchoolProfile[];
@@ -214,7 +215,7 @@ export const StudentRecords: React.FC<StudentRecordsProps> = ({ schools }) => {
             <FileText size={14} /> Form Dispensasi
           </Link>
         </div>
-        <p className="text-center text-xs text-slate-400">SmartSchool System v1.0 &copy; 2026 — {school.name}</p>
+        <VersionFooter schoolName={school.name} />
       </div>
     </div>
   );
