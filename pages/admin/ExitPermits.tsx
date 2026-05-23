@@ -3,6 +3,7 @@ import { StudentPermit, PermitType } from '../../types';
 import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, FilePlus, AlertCircle, ChevronDown, Download, Clock } from 'lucide-react';
 import { getTahunAjaran, getAvailableTahunAjaran, GRADES, GRADE_LETTERS } from '../../utils/school';
 import { exportPermitsToXlsx } from '../../utils/xlsx-export';
+import { exportPermitsToCsv } from '../../utils/csv-export';
 import { Pagination } from '../../components/Pagination';
 
 interface ExitPermitsProps {
@@ -95,14 +96,24 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
             </button>
           )}
           {filtered.length > 0 && (
-            <button
-              onClick={() => exportPermitsToXlsx(filtered, `data-izin-keluar-${new Date().toISOString().slice(0,10)}`)}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all shrink-0"
-              title="Ekspor ke Excel"
-            >
-              <Download size={15} />
-              <span className="hidden sm:inline">Ekspor</span>
-            </button>
+            <>
+              <button
+                onClick={() => exportPermitsToXlsx(filtered, `data-izin-keluar-${new Date().toISOString().slice(0,10)}`)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all shrink-0"
+                title="Ekspor ke Excel"
+              >
+                <Download size={15} />
+                <span className="hidden sm:inline">XLSX</span>
+              </button>
+              <button
+                onClick={() => exportPermitsToCsv(filtered, `data-izin-keluar-${new Date().toISOString().slice(0,10)}`)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-violet-700 hover:bg-violet-50 border border-slate-200 rounded-lg transition-all shrink-0"
+                title="Ekspor ke CSV (untuk R)"
+              >
+                <Download size={15} />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            </>
           )}
           <button onClick={onCreateNew}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all text-sm shrink-0">

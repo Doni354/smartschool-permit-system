@@ -3,6 +3,7 @@ import { StudentPermit, PermitType } from '../../types';
 import { Award, Users, BarChart2, TrendingUp, AlertCircle, ChevronDown, Search, AlertTriangle, Download, Calendar } from 'lucide-react';
 import { getTahunAjaran, getAvailableTahunAjaran, ALL_CLASSES, GRADES, GRADE_LETTERS } from '../../utils/school';
 import { exportPermitsToXlsx, exportSummaryToXlsx } from '../../utils/xlsx-export';
+import { exportPermitsToCsv, exportSummaryToCsv } from '../../utils/csv-export';
 import { Pagination } from '../../components/Pagination';
 
 interface ReportsProps {
@@ -115,13 +116,24 @@ const MonthlyRecap: React.FC<{ permits: StudentPermit[]; selectedTA: string }> =
             <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
           {filteredMonthPermits.length > 0 && (
-            <button
-              onClick={() => exportPermitsToXlsx(filteredMonthPermits, `rekap-${monthLabel.replace(' ', '-')}`)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all"
-            >
-              <Download size={13} />
-              <span className="hidden sm:inline">Ekspor</span>
-            </button>
+            <>
+              <button
+                onClick={() => exportPermitsToXlsx(filteredMonthPermits, `rekap-${monthLabel.replace(' ', '-')}`)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all"
+                title="Ekspor ke Excel"
+              >
+                <Download size={13} />
+                <span className="hidden sm:inline">XLSX</span>
+              </button>
+              <button
+                onClick={() => exportPermitsToCsv(filteredMonthPermits, `rekap-${monthLabel.replace(' ', '-')}`)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs text-violet-700 hover:bg-violet-50 border border-slate-200 rounded-lg transition-all"
+                title="Ekspor ke CSV (untuk R)"
+              >
+                <Download size={13} />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -406,14 +418,24 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400">{taPermits.length} data di TA {selectedTA}</span>
           {taPermits.length > 0 && (
-            <button
-              onClick={() => exportPermitsToXlsx(taPermits, `laporan-TA-${selectedTA.replace('/', '-')}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all"
-              title="Ekspor ke Excel"
-            >
-              <Download size={13} />
-              <span className="hidden sm:inline">Ekspor XLSX</span>
-            </button>
+            <>
+              <button
+                onClick={() => exportPermitsToXlsx(taPermits, `laporan-TA-${selectedTA.replace('/', '-')}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all"
+                title="Ekspor ke Excel"
+              >
+                <Download size={13} />
+                <span className="hidden sm:inline">XLSX</span>
+              </button>
+              <button
+                onClick={() => exportPermitsToCsv(taPermits, `laporan-TA-${selectedTA.replace('/', '-')}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-violet-700 hover:bg-violet-50 border border-slate-200 rounded-lg transition-all"
+                title="Ekspor ke CSV (untuk R)"
+              >
+                <Download size={13} />
+                <span className="hidden sm:inline">CSV</span>
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -575,14 +597,24 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
                 className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
             </div>
             {allStudents.length > 0 && (
-              <button
-                onClick={() => exportSummaryToXlsx(allStudents, `rekap-semua-siswa-${new Date().toISOString().slice(0,10)}`)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all shrink-0"
-                title="Ekspor ke Excel"
-              >
-                <Download size={15} />
-                <span className="hidden sm:inline">Ekspor</span>
-              </button>
+              <>
+                <button
+                  onClick={() => exportSummaryToXlsx(allStudents, `rekap-semua-siswa-${new Date().toISOString().slice(0,10)}`)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 border border-slate-200 rounded-lg transition-all shrink-0"
+                  title="Ekspor ke Excel"
+                >
+                  <Download size={15} />
+                  <span className="hidden sm:inline">XLSX</span>
+                </button>
+                <button
+                  onClick={() => exportSummaryToCsv(allStudents, `rekap-semua-siswa-${new Date().toISOString().slice(0,10)}`)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-violet-700 hover:bg-violet-50 border border-slate-200 rounded-lg transition-all shrink-0"
+                  title="Ekspor ke CSV (untuk R)"
+                >
+                  <Download size={15} />
+                  <span className="hidden sm:inline">CSV</span>
+                </button>
+              </>
             )}
           </div>
         </div>
