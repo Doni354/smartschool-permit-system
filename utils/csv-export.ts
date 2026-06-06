@@ -1,5 +1,35 @@
 import { StudentPermit, PermitType } from '../types';
 
+const SCHOOL_START_HOUR = 7;  // 07:00
+const SCHOOL_END_HOUR = 15;   // 15:00
+
+/**
+ * Calculate permit duration in minutes.
+ * - Terlambat: arrival time - 07:00
+ * - Izin Keluar with return: returnTimestamp - timestamp
+ * - Izin Keluar without return: 15:00 - timestamp
+ */
+function calculateDurationMinutes(p: StudentPermit): number {
+  const ts = new Date(p.timestamp);
+
+  if (p.type === PermitType.LATE_ENTRY) {
+    // Duration = arrival time - 07:00 on the same day
+    const schoolStart = new Date(ts);
+    schoolStart.setHours(SCHOOL_START_HOUR, 0, 0, 0);
+    return Math.max(0, Math.round((ts.getTime() - schoolStart.getTime()) / 60000));
+  }
+
+  // EXIT_PERMIT
+  if (p.returnTimestamp) {
+    return Math.max(0, Math.round((p.returnTimestamp - ts.getTime()) / 60000));
+  }
+
+  // No return → duration until 15:00
+  const schoolEnd = new Date(ts);
+  schoolEnd.setHours(SCHOOL_END_HOUR, 0, 0, 0);
+  return Math.max(0, Math.round((schoolEnd.getTime() - ts.getTime()) / 60000));
+}
+
 /**
  * Escape a CSV field: wrap in quotes if it contains comma, quote, or newline.
  */
@@ -35,7 +65,7 @@ export function exportPermitsToCsv(
   permits: StudentPermit[],
   filename: string = 'data-izin-siswa'
 ) {
-  const headers = ['No', 'Nama Siswa', 'Kelas', 'Tipe', 'Alasan', 'Tanggal', 'Waktu', 'Kembali', 'Tahun Ajaran'];
+  const headers = ['No', 'Nama Siswa', 'Kelas', 'Tipe', 'Alasan', 'Tanggal', 'Waktu', 'Kembali', 'Durasi (menit)', 'Tahun Ajaran'];
 
   const rows = permits.map((p, i) => [
     i + 1,
@@ -52,6 +82,7 @@ export function exportPermitsToCsv(
     p.returnTimestamp
       ? new Date(p.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : '-',
+    calculateDurationMinutes(p),
     p.tahunAjaran || '-',
   ]);
 
