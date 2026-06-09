@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { SchoolProfile, PermitType } from '../types';
+import { SchoolProfile, PermitType, PermitStatus } from '../types';
 import { ClassPicker } from '../components/ClassPicker';
 import { NameAutocomplete } from '../components/NameAutocomplete';
 import { getTahunAjaran } from '../utils/school';
@@ -38,7 +38,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
 
   const handleInitialSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Explicit class validation (hidden input required doesn't always fire)
     if (!formData.className) {
       setClassError(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -61,6 +60,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
         timestamp: now,
         tahunAjaran: getTahunAjaran(now),
         arrivalTimestamp: now,
+        status: PermitStatus.PENDING, // Require admin approval
       });
       setStep('success');
     } catch (err) {
@@ -94,7 +94,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
             <div className="text-center py-8 animate-fade-in">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h2 className="text-xl font-bold text-slate-800">Data Tersimpan!</h2>
-              <p className="text-slate-600 mb-8">Silakan lapor ke guru piket untuk cetak surat.</p>
+              <p className="text-slate-600 mb-8">Silakan lapor ke guru piket untuk konfirmasi kehadiran.</p>
               <button onClick={handleReset} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
                 Isi Form Lagi
               </button>
@@ -126,7 +126,7 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                   className="flex-1 flex items-center justify-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-lg transition-all">
                   <ArrowLeft size={18} /> Kembali
                 </button>
-                <button onClick={handleFinalSubmit} disabled={step === 'submitting' as any}
+                <button onClick={handleFinalSubmit} disabled={step as string === 'submitting'}
                   className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
                   Sesuai, Kirim <Send size={18} />
                 </button>
@@ -134,8 +134,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
             </div>
           ) : (
             <form onSubmit={handleInitialSubmit} className="space-y-5">
-
-              {/* Name input with autocomplete + auto-capitalize */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   Nama Lengkap <span className="text-red-500">*</span>
@@ -148,10 +146,8 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                   placeholder="Ketik nama lengkap..."
                   required
                 />
-                <p className="text-xs text-slate-400 mt-1.5">Nama otomatis diformat Huruf Besar di Awal saat selesai mengetik.</p>
               </div>
 
-              {/* Class picker with validation */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Kelas <span className="text-red-500">*</span>
@@ -169,7 +165,6 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
                 )}
               </div>
 
-              {/* Reason */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   Alasan Terlambat <span className="text-red-500">*</span>

@@ -1,23 +1,31 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Clock, LogOut, BarChart2, LogOutIcon, X } from 'lucide-react';
+import { LayoutDashboard, Clock, LogOut, BarChart2, LogOutIcon, X, Shield } from 'lucide-react';
+import { UserRole as AppUserRole } from '../types';
 
 interface SidebarProps {
   onLogout: () => void;
   schoolName: string;
   adminName?: string;
+  userRole?: AppUserRole;
   isOpen: boolean;
   onClose: () => void;
 }
 
-const navItems = [
-  { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/late', label: 'Siswa Terlambat', icon: Clock, end: false },
-  { to: '/admin/exit', label: 'Izin Keluar', icon: LogOut, end: false },
-  { to: '/admin/reports', label: 'Laporan', icon: BarChart2, end: false },
-];
+export const Sidebar: React.FC<SidebarProps> = ({ onLogout, schoolName, adminName, userRole, isOpen, onClose }) => {
+  const navItems = [
+    { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/admin/late', label: 'Siswa Terlambat', icon: Clock, end: false },
+    { to: '/admin/exit', label: 'Izin Keluar', icon: LogOut, end: false },
+    { to: '/admin/reports', label: 'Laporan', icon: BarChart2, end: false },
+    // Super Admin only
+    ...(userRole === 'SUPER_ADMIN' ? [{ to: '/admin/manage-admins', label: 'Kelola Admin', icon: Shield, end: false }] : []),
+  ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ onLogout, schoolName, adminName, isOpen, onClose }) => {
+  const roleBadge = userRole === 'SUPER_ADMIN'
+    ? { label: 'Super Admin', color: 'bg-amber-500/20 text-amber-300' }
+    : { label: 'Admin Piket', color: 'bg-blue-500/20 text-blue-300' };
+
   return (
     <>
       {/* Mobile backdrop overlay */}
@@ -81,6 +89,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLogout, schoolName, adminNam
             <div className="px-3 py-2 mb-2">
               <p className="text-xs text-slate-500">Masuk sebagai</p>
               <p className="text-sm text-slate-300 font-medium truncate">{adminName}</p>
+              <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${roleBadge.color}`}>
+                {roleBadge.label}
+              </span>
             </div>
           )}
           <button

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { StudentPermit, PermitType } from '../../types';
-import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, FilePlus, AlertCircle, ChevronDown, Download, Clock } from 'lucide-react';
+import { StudentPermit, PermitType, PermitStatus, User, resolvePermitStatus } from '../../types';
+import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, FilePlus, AlertCircle, ChevronDown, Download, Clock, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { getTahunAjaran, getAvailableTahunAjaran, GRADES, GRADE_LETTERS } from '../../utils/school';
 import { exportPermitsToXlsx } from '../../utils/xlsx-export';
 import { exportPermitsToCsv } from '../../utils/csv-export';
@@ -13,6 +13,8 @@ interface ExitPermitsProps {
   onEdit: (permit: StudentPermit) => void;
   onDelete: (id: string) => void;
   onCreateNew: () => void;
+  onApprove: (permit: StudentPermit) => void;
+  currentUser: User;
 }
 
 function getInitials(name: string) {
@@ -24,7 +26,23 @@ function resolveTahunAjaran(p: StudentPermit) {
   return p.tahunAjaran || getTahunAjaran(p.timestamp);
 }
 
-export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPrint, onEdit, onDelete, onCreateNew }) => {
+// Status badge component
+const StatusBadge: React.FC<{ status: PermitStatus }> = ({ status }) => {
+  if (status === PermitStatus.APPROVED) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+        <CheckCircle2 size={11} /> Disetujui
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 animate-pulse">
+      <Clock size={11} /> Menunggu
+    </span>
+  );
+};
+
+export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPrint, onEdit, onDelete, onCreateNew, onApprove, currentUser }) => {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -32,6 +50,7 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
   const [letterFilter, setLetterFilter] = useState('');
   const [selectedTA, setSelectedTA] = useState('');
   const [showFilter, setShowFilter] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'' | 'PENDING' | 'APPROVED'>('');
 
   const handleGradeSelect = (g: string) => {
     setGradeFilter(g);
@@ -41,9 +60,13 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
   const exitPermits = useMemo(() => permits.filter(p => p.type === PermitType.EXIT_PERMIT), [permits]);
   const availableTA = useMemo(() => getAvailableTahunAjaran(exitPermits.map(p => p.timestamp)), [exitPermits]);
 
+  // Count pending
+  const pendingCount = useMemo(() => exitPermits.filter(p => resolvePermitStatus(p) === PermitStatus.PENDING).length, [exitPermits]);
+
   const filtered = useMemo(() => {
     let data = exitPermits;
     if (selectedTA) data = data.filter(p => resolveTahunAjaran(p) === selectedTA);
+    if (statusFilter) data = data.filter(p => resolvePermitStatus(p) === statusFilter);
     if (gradeFilter && letterFilter) data = data.filter(p => p.className === `${gradeFilter}-${letterFilter}`);
     else if (gradeFilter) data = data.filter(p => p.className.startsWith(gradeFilter + '-'));
     if (search) {
@@ -51,7 +74,8 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
       data = data.filter(p =>
         p.studentName.toLowerCase().includes(q) ||
         p.className.toLowerCase().includes(q) ||
-        p.reason.toLowerCase().includes(q)
+        p.reason.toLowerCase().includes(q) ||
+        (p.approvedBy || '').toLowerCase().includes(q)
       );
     }
     if (dateFrom) {
@@ -63,18 +87,37 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
       data = data.filter(p => p.timestamp <= to.getTime());
     }
     return data;
-  }, [exitPermits, search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA]);
+  }, [exitPermits, search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA, statusFilter]);
 
-  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setSelectedTA(''); };
-  const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || selectedTA;
+  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setSelectedTA(''); setStatusFilter(''); };
+  const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || selectedTA || statusFilter;
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA, statusFilter]);
   const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page, perPage]);
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {/* Pending Alert */}
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+            <Clock className="text-amber-600" size={20} />
+          </div>
+          <div>
+            <p className="font-semibold text-amber-800 text-sm">{pendingCount} dispensasi menunggu persetujuan</p>
+            <p className="text-xs text-amber-600">Klik tombol "Acc" untuk menyetujui</p>
+          </div>
+          <button
+            onClick={() => setStatusFilter('PENDING')}
+            className="ml-auto px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors shrink-0"
+          >
+            Lihat
+          </button>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
         <div className="flex gap-2">
@@ -122,8 +165,24 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
           </button>
         </div>
 
-        {/* TA + Grade quick filters */}
+        {/* Status tabs + TA + Grade quick filters */}
         <div className="flex flex-wrap gap-2 items-center">
+          {/* Status filter */}
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+            <button onClick={() => setStatusFilter('')}
+              className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all ${statusFilter === '' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>
+            <button onClick={() => setStatusFilter('PENDING')}
+              className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all flex items-center gap-1 ${statusFilter === 'PENDING' ? 'bg-amber-500 shadow text-white' : 'text-amber-600 hover:text-amber-700'}`}>
+              <Clock size={11} />Menunggu{pendingCount > 0 && <span className="text-[10px]">({pendingCount})</span>}
+            </button>
+            <button onClick={() => setStatusFilter('APPROVED')}
+              className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all flex items-center gap-1 ${statusFilter === 'APPROVED' ? 'bg-green-600 shadow text-white' : 'text-green-600 hover:text-green-700'}`}>
+              <CheckCircle2 size={11} />Disetujui
+            </button>
+          </div>
+
+          <div className="w-px h-5 bg-slate-200 hidden sm:block" />
+
           <div className="relative">
             <select
               className="appearance-none bg-slate-100 rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
@@ -199,26 +258,43 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
               <span className="text-xs text-blue-600">{new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
             </div>
             <div className="divide-y divide-blue-100">
-              {todayEntries.map(permit => (
-                <div key={permit.id} className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center text-blue-800 font-bold text-xs shrink-0">{getInitials(permit.studentName)}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 text-sm truncate">{permit.studentName}</p>
-                    <p className="text-xs text-slate-500">
-                      <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">{permit.className}</span>
-                      <span className="ml-2 text-slate-400">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                    </p>
+              {todayEntries.map(permit => {
+                const status = resolvePermitStatus(permit);
+                const isPending = status === PermitStatus.PENDING;
+                return (
+                  <div key={permit.id} className="px-4 py-3 flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${isPending ? 'bg-amber-200 text-amber-800' : 'bg-blue-200 text-blue-800'}`}>{getInitials(permit.studentName)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-800 text-sm truncate">{permit.studentName}</p>
+                        <StatusBadge status={status} />
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">{permit.className}</span>
+                        <span className="ml-2 text-slate-400">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                        {permit.approvedBy && <span className="ml-2 text-slate-400">• Acc: {permit.approvedBy}</span>}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {isPending && (
+                        <button onClick={() => onApprove(permit)}
+                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                          title="Setujui Dispensasi">
+                          <ShieldCheck size={14} /> Acc
+                        </button>
+                      )}
+                      {!isPending && (
+                        <button onClick={() => onPrint(permit)} className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-lg transition-colors" title="Cetak">
+                          <Printer size={17} />
+                        </button>
+                      )}
+                      <button onClick={() => onEdit(permit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="Edit">
+                        <Pencil size={15} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => onPrint(permit)} className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-lg transition-colors" title="Cetak">
-                      <Printer size={17} />
-                    </button>
-                    <button onClick={() => onEdit(permit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-colors" title="Edit">
-                      <Pencil size={15} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -240,44 +316,57 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
         <>
           {/* Mobile Cards */}
           <div className="sm:hidden space-y-3">
-            {paginated.map(permit => (
-              <div key={permit.id} className="bg-white rounded-xl border border-slate-200 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">{getInitials(permit.studentName)}</div>
-                    <div>
-                      <p className="font-semibold text-slate-800">{permit.studentName}</p>
-                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{permit.className}</span>
+            {paginated.map(permit => {
+              const status = resolvePermitStatus(permit);
+              const isPending = status === PermitStatus.PENDING;
+              return (
+                <div key={permit.id} className={`bg-white rounded-xl border p-4 ${isPending ? 'border-amber-300 bg-amber-50/30' : 'border-slate-200'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${isPending ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{getInitials(permit.studentName)}</div>
+                      <div>
+                        <p className="font-semibold text-slate-800">{permit.studentName}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{permit.className}</span>
+                          <StatusBadge status={status} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {isPending ? (
+                        <button onClick={() => onApprove(permit)} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1">
+                          <ShieldCheck size={14} /> Acc
+                        </button>
+                      ) : (
+                        <button onClick={() => onPrint(permit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Printer size={16} /></button>
+                      )}
+                      <button onClick={() => onEdit(permit)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"><Pencil size={16} /></button>
+                      <button onClick={() => onDelete(permit.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => onPrint(permit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Printer size={16} /></button>
-                    <button onClick={() => onEdit(permit)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"><Pencil size={16} /></button>
-                    <button onClick={() => onDelete(permit.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                  <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Waktu Izin</p>
+                      <p className="font-medium text-slate-700">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} — {new Date(permit.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Kembali</p>
+                      {permit.returnTimestamp ? (
+                        <span className="font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{new Date(permit.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                      ) : <span className="text-slate-400 italic">Tidak ada</span>}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Disetujui Oleh</p>
+                      <p className="text-slate-600">{permit.approvedBy || <span className="italic text-slate-400">—</span>}</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Alasan</p>
+                      <p className="text-slate-700 truncate">{permit.reason}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Waktu Izin</p>
-                    <p className="font-medium text-slate-700">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} — {new Date(permit.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Kembali</p>
-                    {permit.returnTimestamp ? (
-                      <span className="font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{new Date(permit.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                    ) : <span className="text-slate-400 italic">Tidak ada</span>}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">TA</p>
-                    <p className="text-slate-600">{resolveTahunAjaran(permit)}</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-400 uppercase tracking-wide text-[10px] mb-0.5">Alasan</p>
-                    <p className="text-slate-700 truncate">{permit.reason}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Desktop Table */}
@@ -288,45 +377,68 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
                   <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-200">
                     <th className="p-4 pl-5">Siswa</th>
                     <th className="p-4">Kelas</th>
+                    <th className="p-4">Status</th>
                     <th className="p-4">Waktu Izin</th>
                     <th className="p-4">TA</th>
                     <th className="p-4">Alasan</th>
+                    <th className="p-4">Disetujui Oleh</th>
                     <th className="p-4">Kembali</th>
                     <th className="p-4 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginated.map(permit => (
-                    <tr key={permit.id} className="hover:bg-slate-50 transition-colors group">
-                      <td className="p-4 pl-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs">{getInitials(permit.studentName)}</div>
-                          <span className="font-semibold text-slate-800">{permit.studentName}</span>
-                        </div>
-                      </td>
-                      <td className="p-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{permit.className}</span></td>
-                      <td className="p-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-semibold text-slate-700">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                          <span className="text-xs text-slate-400">{new Date(permit.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 text-xs text-slate-500">{resolveTahunAjaran(permit)}</td>
-                      <td className="p-4"><p className="text-sm text-slate-600 max-w-[140px] truncate" title={permit.reason}>{permit.reason}</p></td>
-                      <td className="p-4">
-                        {permit.returnTimestamp ? (
-                          <span className="text-sm font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{new Date(permit.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                        ) : <span className="text-xs text-slate-400 italic">—</span>}
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex justify-center gap-1">
-                          <button onClick={() => onPrint(permit)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors"><Printer size={17} /></button>
-                          <button onClick={() => onEdit(permit)} className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition-colors"><Pencil size={17} /></button>
-                          <button onClick={() => onDelete(permit.id)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"><Trash2 size={17} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginated.map(permit => {
+                    const status = resolvePermitStatus(permit);
+                    const isPending = status === PermitStatus.PENDING;
+                    return (
+                      <tr key={permit.id} className={`hover:bg-slate-50 transition-colors group ${isPending ? 'bg-amber-50/40' : ''}`}>
+                        <td className="p-4 pl-5">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs ${isPending ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{getInitials(permit.studentName)}</div>
+                            <span className="font-semibold text-slate-800">{permit.studentName}</span>
+                          </div>
+                        </td>
+                        <td className="p-4"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{permit.className}</span></td>
+                        <td className="p-4"><StatusBadge status={status} /></td>
+                        <td className="p-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-slate-700">{new Date(permit.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="text-xs text-slate-400">{new Date(permit.timestamp).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-xs text-slate-500">{resolveTahunAjaran(permit)}</td>
+                        <td className="p-4"><p className="text-sm text-slate-600 max-w-[140px] truncate" title={permit.reason}>{permit.reason}</p></td>
+                        <td className="p-4">
+                          {permit.approvedBy ? (
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-slate-700">{permit.approvedBy}</span>
+                              {permit.approvedAt && <span className="text-xs text-slate-400">{new Date(permit.approvedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>}
+                            </div>
+                          ) : <span className="text-xs text-slate-400 italic">—</span>}
+                        </td>
+                        <td className="p-4">
+                          {permit.returnTimestamp ? (
+                            <span className="text-sm font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">{new Date(permit.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+                          ) : <span className="text-xs text-slate-400 italic">—</span>}
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex justify-center gap-1">
+                            {isPending ? (
+                              <button onClick={() => onApprove(permit)}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                                title="Setujui Dispensasi">
+                                <ShieldCheck size={14} /> Acc
+                              </button>
+                            ) : (
+                              <button onClick={() => onPrint(permit)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors"><Printer size={17} /></button>
+                            )}
+                            <button onClick={() => onEdit(permit)} className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 p-2 rounded-lg transition-colors"><Pencil size={17} /></button>
+                            <button onClick={() => onDelete(permit.id)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"><Trash2 size={17} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

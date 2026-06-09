@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, collection, addDoc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc, setDoc } from "firebase/firestore";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB9L6LOrxcnDZov4xEH522MZEqOtmTXfmg",
@@ -16,8 +17,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+export const functions = getFunctions(app);
+
+// Secondary app for creating users without signing out current admin
+const secondaryApp = initializeApp(firebaseConfig, "secondary");
+export const secondaryAuth = getAuth(secondaryApp);
 
 // Export Firestore functions for use in services
-export { collection, addDoc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc };
+export { collection, addDoc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc, setDoc };
 // Export Auth functions
-export { signInWithEmailAndPassword, signOut, onAuthStateChanged };
+export { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile };
+// Export Functions
+export { httpsCallable };

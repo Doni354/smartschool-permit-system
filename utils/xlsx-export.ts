@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { StudentPermit, PermitType } from '../types';
+import { StudentPermit, PermitType, resolvePermitStatus, PermitStatus } from '../types';
 
 const SCHOOL_START_HOUR = 7;  // 07:00
 const SCHOOL_END_HOUR = 15;   // 15:00
@@ -53,6 +53,8 @@ export function exportPermitsToXlsx(
       ? new Date(p.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : '-',
     'Durasi (menit)': calculateDurationMinutes(p),
+    'Status': resolvePermitStatus(p) === PermitStatus.APPROVED ? 'Disetujui' : 'Menunggu',
+    'Disetujui Oleh': p.approvedBy || '-',
     'Tahun Ajaran': p.tahunAjaran || '-',
   }));
 

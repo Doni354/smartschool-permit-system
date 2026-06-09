@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { SchoolProfile, PermitType } from '../types';
+import { SchoolProfile, PermitType, PermitStatus } from '../types';
 import { ClassPicker } from '../components/ClassPicker';
 import { NameAutocomplete } from '../components/NameAutocomplete';
 import { getTahunAjaran } from '../utils/school';
@@ -61,6 +61,7 @@ export const StudentDispen: React.FC<StudentDispenProps> = ({ schools }) => {
         schoolId: selectedSchoolId,
         timestamp: now,
         tahunAjaran: getTahunAjaran(now),
+        status: PermitStatus.PENDING,
       };
       if (returnTimestamp) createData.returnTimestamp = returnTimestamp;
 
@@ -97,7 +98,7 @@ export const StudentDispen: React.FC<StudentDispenProps> = ({ schools }) => {
             <div className="text-center py-8 animate-fade-in">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h2 className="text-xl font-bold text-slate-800">Pengajuan Terkirim!</h2>
-              <p className="text-slate-600 mb-8">Dispensasi Anda telah tercatat. Silakan tunggu persetujuan dari guru piket.</p>
+              <p className="text-slate-600 mb-8">Dispensasi Anda telah tercatat dan menunggu persetujuan dari guru piket. Silakan hubungi guru piket untuk proses persetujuan.</p>
               <button onClick={handleReset} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-all">
                 Ajukan Lagi
               </button>

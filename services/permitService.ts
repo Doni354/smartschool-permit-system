@@ -1,5 +1,5 @@
 import { db, collection, addDoc, query, where, getDocs, getDoc, doc, deleteDoc, updateDoc } from '../firebase';
-import { StudentPermit, PermitType } from '../types';
+import { StudentPermit, PermitType, PermitStatus, User } from '../types';
 
 const PERMITS_COLLECTION = 'permits';
 
@@ -61,7 +61,7 @@ export const createPermit = async (permit: Omit<StudentPermit, 'id'>): Promise<s
 export const getPermitsBySchool = async (schoolId: string, type?: PermitType): Promise<StudentPermit[]> => {
   try {
     // Try to order by timestamp desc in query, might require index in Firestore
-    let q = query(
+    const q = query(
       collection(db, PERMITS_COLLECTION),
       where('schoolId', '==', schoolId)
     );
@@ -133,6 +133,37 @@ export const updatePermit = async (id: string, data: Partial<StudentPermit>): Pr
     await updateDoc(doc(db, PERMITS_COLLECTION, id), data);
   } catch (error) {
     console.error("Error updating permit:", error);
+    throw error;
+  }
+};
+
+/**
+ * Approve a permit request.
+ * Sets status to APPROVED with approver info and timestamp.
+ */
+export const approvePermit = async (permitId: string, approver: User, isSuperAdmin: boolean = false): Promise<void> => {
+  const approvalData = {
+    status: PermitStatus.APPROVED,
+    approvedBy: approver.name,
+    approvedById: approver.id,
+    approvedAt: Date.now(),
+    isSuperAdminApproved: isSuperAdmin,
+  };
+
+  try {
+    const docRef = doc(db, PERMITS_COLLECTION, permitId);
+    await updateDoc(docRef, approvalData);
+  } catch (error) {
+    console.error("Error approving permit:", error);
+    // Fallback local storage logic...
+    if (permitId.startsWith('local_')) {
+      const stored = JSON.parse(localStorage.getItem(PERMITS_COLLECTION) || '[]');
+      const index = stored.findIndex((p: any) => p.id === permitId);
+      if (index !== -1) {
+        stored[index] = { ...stored[index], ...approvalData };
+        localStorage.setItem(PERMITS_COLLECTION, JSON.stringify(stored));
+      }
+    }
     throw error;
   }
 };

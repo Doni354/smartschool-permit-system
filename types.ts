@@ -3,15 +3,22 @@ export enum PermitType {
   EXIT_PERMIT = "EXIT_PERMIT",
 }
 
+export enum PermitStatus {
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+}
+
+export type UserRole = "SUPER_ADMIN" | "ADMIN_PIKET";
+
 export interface SchoolProfile {
   id: string;
   name: string;
   address: string;
-  logoUrl?: string; // Placeholder for logo
+  logoUrl?: string;
   phone?: string;
   email?: string;
-  headmasterName?: string; // Kepala Sekolah (optional)
-  studentAffairsName?: string; // Waka Kesiswaan
+  headmasterName?: string;
+  studentAffairsName?: string;
 }
 
 export interface StudentPermit {
@@ -20,25 +27,46 @@ export interface StudentPermit {
   studentName: string;
   className: string;
   reason: string;
-  timestamp: number; // Created At
+  timestamp: number;
   schoolId: string;
-  tahunAjaran?: string; // e.g. "2025/2026" — derived from timestamp if not set
+  tahunAjaran?: string;
+  
+  // Approval workflow
+  status?: PermitStatus;
+  approvedBy?: string;
+  approvedById?: string;
+  approvedAt?: number;
+  isSuperAdminApproved?: boolean;
 
   // Specific to Late Entry
   arrivalTimestamp?: number;
 
   // Specific to Exit Permit
-  exitTimestamp?: number; // Planned exit
-  returnTimestamp?: number; // Planned return (optional)
-  approvedBy?: string; // Teacher name
+  exitTimestamp?: number;
+  returnTimestamp?: number;
 }
 
+/** Helper: resolve permit status for legacy compatibility */
+export function resolvePermitStatus(permit: StudentPermit): PermitStatus {
+  if (!permit.status) return PermitStatus.APPROVED; 
+  return permit.status;
+}
+
+export interface AdminUser {
+  uid: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  schoolId: string;
+  createdAt?: number;
+  createdBy?: string;
+}
 
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: "ADMIN" | "TEACHER";
+  role: UserRole;
   schoolId: string;
 }
 

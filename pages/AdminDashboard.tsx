@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { SchoolProfile, User, StudentPermit, PermitType } from '../types';
+import { SchoolProfile, User, StudentPermit, PermitType, PermitStatus, resolvePermitStatus } from '../types';
 import { Sidebar } from '../components/Sidebar';
 import { ClassPicker } from '../components/ClassPicker';
 import { NameAutocomplete } from '../components/NameAutocomplete';
@@ -8,7 +8,8 @@ import { DashboardHome } from './admin/DashboardHome';
 import { LateEntries } from './admin/LateEntries';
 import { ExitPermits } from './admin/ExitPermits';
 import { Reports } from './admin/Reports';
-import { getPermitsBySchool, createPermit, deletePermit, updatePermit } from '../services/permitService';
+import { ManageAdmins } from './admin/ManageAdmins';
+import { getPermitsBySchool, createPermit, deletePermit, updatePermit, approvePermit } from '../services/permitService';
 import { getTahunAjaran } from '../utils/school';
 import { CheckCircle, X, Loader2, Menu } from 'lucide-react';
 
@@ -26,8 +27,6 @@ const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 
     <button onClick={onClose} className="ml-2 hover:bg-white/20 rounded-full p-0.5"><X size={15} /></button>
   </div>
 );
-
-
 
 // Create/Edit Modal (responsive)
 const PermitModal = ({ permit, onClose, onSave, isLoading, existingNames }: {
@@ -62,7 +61,6 @@ const PermitModal = ({ permit, onClose, onSave, isLoading, existingNames }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 animate-fade-in">
-      {/* Bottom sheet on mobile, centered modal on sm+ */}
       <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-5 border-b border-slate-100 sticky top-0 bg-white z-10">
           <div>
@@ -139,6 +137,7 @@ function getPageInfo(pathname: string) {
   if (pathname.includes('/late')) return { title: 'Siswa Terlambat', subtitle: 'Data keterlambatan siswa' };
   if (pathname.includes('/exit')) return { title: 'Izin Keluar', subtitle: 'Kelola surat izin keluar siswa' };
   if (pathname.includes('/reports')) return { title: 'Laporan & Statistik', subtitle: 'Analisis data izin siswa' };
+  if (pathname.includes('/manage-admins')) return { title: 'Kelola Admin', subtitle: 'Manajemen akun guru piket' };
   return { title: 'Dashboard', subtitle: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) };
 }
 
@@ -165,7 +164,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
 
   useEffect(() => { fetchData(); }, [school.id]);
 
-  // Close sidebar on route change (mobile)
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   const existingNames = useMemo(() => {
@@ -179,6 +177,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
   };
 
   const handlePrint = (permit: StudentPermit) => {
+    const status = resolvePermitStatus(permit);
+    if (status !== PermitStatus.APPROVED) {
+      showToast('Surat belum disetujui. Setujui terlebih dahulu.', 'error');
+      return;
+    }
     localStorage.setItem('printData', JSON.stringify(permit));
     window.open(`/print/${permit.id}`, '_blank');
   };
@@ -191,6 +194,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
       fetchData();
     } catch {
       showToast('Gagal menghapus', 'error');
+    }
+  };
+
+  const handleApprove = async (permit: StudentPermit) => {
+    try {
+      const isSuper = (user as any).role === 'SUPER_ADMIN';
+      await approvePermit(permit.id, user, isSuper);
+      showToast(`Persetujuan ${permit.studentName} berhasil`, 'success');
+      fetchData();
+    } catch (err: any) {
+      console.error("Approve failed:", err);
+      showToast(`Gagal menyetujui: ${err.message || 'Cek koneksi/akses'}`, 'error');
     }
   };
 
@@ -222,6 +237,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
           timestamp: now,
           tahunAjaran: getTahunAjaran(now),
           approvedBy: user.name,
+          approvedById: user.id,
+          approvedAt: now,
+          status: PermitStatus.APPROVED,
         };
         if (returnTimestamp !== null) createData.returnTimestamp = returnTimestamp;
         await createPermit(createData);
@@ -240,25 +258,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
   return (
     <div className="flex h-screen overflow-hidden font-sans bg-slate-50">
       {notification && <Toast message={notification.msg} type={notification.type} onClose={() => setNotification(null)} />}
-
-      {/* Sidebar — responsive drawer */}
       <Sidebar
         onLogout={onLogout}
         schoolName={school.name}
         adminName={user.email}
+        userRole={user.role}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
-
-      {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar — mobile hamburger + page title */}
         <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 print:hidden shrink-0">
-          {/* Hamburger — only on mobile */}
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors shrink-0"
-            aria-label="Buka menu"
           >
             <Menu size={22} />
           </button>
@@ -267,17 +279,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
             <p className="text-xs text-slate-500 truncate hidden sm:block">{subtitle}</p>
           </div>
         </header>
-
-        {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Routes>
             <Route index element={
-              <DashboardHome permits={permits} loading={loading} onViewAll={(path) => navigate(path)} />
+              <DashboardHome permits={permits} loading={loading} user={user} onViewAll={(path) => navigate(path)} onApprove={handleApprove} />
             } />
             <Route path="late" element={
               <LateEntries
                 permits={permits} loading={loading}
                 onPrint={handlePrint} onEdit={(p) => setModalPermit(p)} onDelete={handleDelete}
+                onApprove={handleApprove}
               />
             } />
             <Route path="exit" element={
@@ -285,6 +296,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
                 permits={permits} loading={loading}
                 onPrint={handlePrint} onEdit={(p) => setModalPermit(p)} onDelete={handleDelete}
                 onCreateNew={() => setModalPermit('new')}
+                onApprove={handleApprove}
+                currentUser={user}
               />
             } />
             <Route path="reports" element={
@@ -293,11 +306,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
                 onDelete={handleDelete}
               />
             } />
+            <Route path="manage-admins" element={
+              <ManageAdmins user={user} />
+            } />
           </Routes>
         </main>
       </div>
-
-      {/* Modal */}
       {modalPermit !== null && (
         <PermitModal
           permit={modalPermit === 'new' ? null : modalPermit as StudentPermit}

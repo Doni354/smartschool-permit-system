@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Clock, LogOut, FileText, LayoutDashboard, AlertCircle, TrendingUp, Users, ChevronDown } from 'lucide-react';
-import { StudentPermit, PermitType } from '../../types';
+import { Clock, LogOut, FileText, LayoutDashboard, AlertCircle, TrendingUp, Users, ChevronDown, ShieldCheck } from 'lucide-react';
+import { StudentPermit, PermitType, PermitStatus, resolvePermitStatus } from '../../types';
 import { GRADES, GRADE_LETTERS } from '../../utils/school';
 
 interface DashboardHomeProps {
   permits: StudentPermit[];
   loading: boolean;
+  user?: any;
   onViewAll: (path: string) => void;
+  onApprove?: (permit: StudentPermit) => void;
 }
 
 function getTimeAgo(timestamp: number) {
@@ -42,11 +44,12 @@ const StatCard = ({ title, value, icon: Icon, colorClass, subtitle, onClick }: a
   </div>
 );
 
-export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, onViewAll }) => {
+export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, onViewAll, onApprove, user }) => {
   const today = new Date().toDateString();
   const todayLate = permits.filter(p => p.type === PermitType.LATE_ENTRY && new Date(p.timestamp).toDateString() === today).length;
   const todayExit = permits.filter(p => p.type === PermitType.EXIT_PERMIT && new Date(p.timestamp).toDateString() === today).length;
   const totalEntries = permits.length;
+  const pendingCount = permits.filter(p => resolvePermitStatus(p) === PermitStatus.PENDING).length;
 
   const recent = [...permits].sort((a, b) => b.timestamp - a.timestamp).slice(0, 7);
 
@@ -57,46 +60,47 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, 
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - i));
       const dateStr = d.toDateString();
       const dayName = DAYS_ID[d.getDay()];
-      const dateLabel = `${d.getDate()}/${d.getMonth() + 1}`;
-      const late = permits.filter(p => p.type === PermitType.LATE_ENTRY && new Date(p.timestamp).toDateString() === dateStr).length;
-      const exit = permits.filter(p => p.type === PermitType.EXIT_PERMIT && new Date(p.timestamp).toDateString() === dateStr).length;
-      return { dayName, dateLabel, late, exit, total: late + exit };
+      const dayPermits = permits.filter(p => new Date(p.timestamp).toDateString() === dateStr);
+      return {
+        dayName,
+        dateLabel: `${d.getDate()}/${d.getMonth() + 1}`,
+        late: dayPermits.filter(p => p.type === PermitType.LATE_ENTRY).length,
+        exit: dayPermits.filter(p => p.type === PermitType.EXIT_PERMIT).length,
+        total: dayPermits.length
+      };
     });
   }, [permits]);
 
   const maxDaily = Math.max(...dailyTrend.map(d => d.total), 1);
 
-  // --- This month recap ---
+  // --- Month Recap ---
+  const [monthGradeFilter, setMonthGradeFilter] = useState('');
   const now = new Date();
-  const thisMonthPermits = useMemo(() =>
-    permits.filter(p => {
+  const thisMonthPermits = useMemo(() => {
+    return permits.filter(p => {
       const d = new Date(p.timestamp);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }), [permits]);
+      const isThisMonth = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      if (!isThisMonth) return false;
+      if (monthGradeFilter && !p.className.startsWith(monthGradeFilter)) return false;
+      return true;
+    });
+  }, [permits, monthGradeFilter]);
 
   const monthLate = thisMonthPermits.filter(p => p.type === PermitType.LATE_ENTRY).length;
   const monthExit = thisMonthPermits.filter(p => p.type === PermitType.EXIT_PERMIT).length;
 
-  // Per-class this month
-  const [monthGradeFilter, setMonthGradeFilter] = useState('');
   const classBreakdownMonth = useMemo(() => {
-    const data = monthGradeFilter
-      ? thisMonthPermits.filter(p => p.className.startsWith(monthGradeFilter + '-'))
-      : thisMonthPermits;
     const map: Record<string, { late: number; exit: number }> = {};
-    for (const p of data) {
-      const cls = p.className?.trim();
-      if (!cls) continue;
-      if (!map[cls]) map[cls] = { late: 0, exit: 0 };
-      if (p.type === PermitType.LATE_ENTRY) map[cls].late++;
-      else map[cls].exit++;
+    for (const p of thisMonthPermits) {
+      if (!map[p.className]) map[p.className] = { late: 0, exit: 0 };
+      if (p.type === PermitType.LATE_ENTRY) map[p.className].late++;
+      else map[p.className].exit++;
     }
     return Object.entries(map)
       .map(([cls, v]) => ({ cls, ...v, total: v.late + v.exit }))
       .sort((a, b) => b.total - a.total);
   }, [thisMonthPermits, monthGradeFilter]);
 
-  // Top students this month
   const topStudentsMonth = useMemo(() => {
     const map: Record<string, { name: string; className: string; count: number; late: number; exit: number }> = {};
     for (const p of thisMonthPermits) {
@@ -115,9 +119,10 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, 
   return (
     <div className="space-y-6 sm:space-y-8 animate-fade-in">
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
         <StatCard title="Terlambat Hari Ini" value={loading ? '...' : todayLate} icon={Clock} colorClass="text-amber-500" subtitle="Siswa terlambat" onClick={() => onViewAll('/admin/late')} />
         <StatCard title="Izin Keluar Hari Ini" value={loading ? '...' : todayExit} icon={LogOut} colorClass="text-blue-500" subtitle="Surat diterbitkan" onClick={() => onViewAll('/admin/exit')} />
+        <StatCard title="Menunggu Acc" value={loading ? '...' : pendingCount} icon={ShieldCheck} colorClass="text-orange-500" subtitle="Perlu persetujuan" onClick={() => onViewAll('/admin/exit')} />
         <StatCard title="Total Riwayat" value={loading ? '...' : totalEntries} icon={FileText} colorClass="text-indigo-500" subtitle="Semua data" onClick={() => onViewAll('/admin/reports')} />
       </div>
 
@@ -161,10 +166,6 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, 
                 <p className="text-[10px] text-slate-400">{d.dateLabel}</p>
               </div>
             ))}
-          </div>
-          <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block" /> Terlambat</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-400 inline-block" /> Izin Keluar</span>
           </div>
         </div>
       </div>
@@ -223,42 +224,11 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, 
                     <div style={{ width: `${(c.late / maxClassMonth) * 100}%` }} className="h-full bg-amber-400 transition-all" />
                     <div style={{ width: `${(c.exit / maxClassMonth) * 100}%` }} className="h-full bg-blue-400 transition-all" />
                   </div>
-                  <div className="flex gap-3 mt-0.5">
-                    <span className="text-xs text-amber-600">{c.late} telat</span>
-                    <span className="text-xs text-blue-600">{c.exit} dispen</span>
-                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Top students this month */}
-        {topStudentsMonth.length > 0 && (
-          <div className="border-t border-slate-100">
-            <div className="p-4 sm:p-5">
-              <h4 className="text-sm font-bold text-slate-700 mb-3">Top Siswa Bulan Ini</h4>
-              <div className="space-y-2">
-                {topStudentsMonth.map((s, i) => (
-                  <div key={s.name + i} className="flex items-center gap-3">
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                      i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-slate-300 text-slate-700' : 'bg-slate-100 text-slate-500'
-                    }`}>{i + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{s.name}</p>
-                      <p className="text-xs text-slate-400">{s.className}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs shrink-0">
-                      <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">{s.late}T</span>
-                      <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">{s.exit}K</span>
-                      <span className="font-bold text-slate-700">{s.count}×</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Recent Activity */}
@@ -294,11 +264,30 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ permits, loading, 
                   <h4 className="font-semibold text-slate-900 truncate">{permit.studentName}</h4>
                   <p className="text-xs text-slate-500 truncate">{permit.className} • <span className="italic">{permit.reason}</span></p>
                 </div>
-                <div className="text-right shrink-0">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${permit.type === PermitType.LATE_ENTRY ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {permit.type === PermitType.LATE_ENTRY ? 'Terlambat' : 'Izin Keluar'}
-                  </span>
-                  <p className="text-xs text-slate-400 mt-1">{getTimeAgo(permit.timestamp)}</p>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                      resolvePermitStatus(permit) === PermitStatus.APPROVED 
+                        ? 'bg-emerald-100 text-emerald-700' 
+                        : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {resolvePermitStatus(permit) === PermitStatus.APPROVED ? 'Disetujui' : 'Menunggu'}
+                    </span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${permit.type === PermitType.LATE_ENTRY ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {permit.type === PermitType.LATE_ENTRY ? 'Terlambat' : 'Izin Keluar'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-slate-400">{getTimeAgo(permit.timestamp)}</p>
+                    {resolvePermitStatus(permit) === PermitStatus.PENDING && onApprove && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onApprove(permit); }}
+                        className="px-3 py-1 bg-blue-600 text-white text-[10px] font-bold rounded-lg hover:bg-blue-700 shadow-md shadow-blue-600/20 transition-all"
+                      >
+                        ACC
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

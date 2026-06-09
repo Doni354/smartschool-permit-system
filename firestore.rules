@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the caller is a Super Admin
+    function isSuperAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
+    }
+
+    // Helper: check if the caller is any admin (Super Admin or Admin Piket)
+    function isAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Admins collection — only Super Admin can write, all authenticated can read
+    match /admins/{uid} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Permits collection
+    match /permits/{permitId} {
+      // Public read — students need to see their own data via public pages
+      allow read: if true;
+
+      // Public create — student forms (StudentEntry, StudentDispen)
+      allow create: if true;
+
+      // Only authenticated admins can update/delete
+      allow update, delete: if isAdmin();
+    }
+  }
+}

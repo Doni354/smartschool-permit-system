@@ -1,4 +1,4 @@
-import { StudentPermit, PermitType } from '../types';
+import { StudentPermit, PermitType, resolvePermitStatus, PermitStatus } from '../types';
 
 const SCHOOL_START_HOUR = 7;  // 07:00
 const SCHOOL_END_HOUR = 15;   // 15:00
@@ -65,7 +65,7 @@ export function exportPermitsToCsv(
   permits: StudentPermit[],
   filename: string = 'data-izin-siswa'
 ) {
-  const headers = ['No', 'Nama Siswa', 'Kelas', 'Tipe', 'Alasan', 'Tanggal', 'Waktu', 'Kembali', 'Durasi (menit)', 'Tahun Ajaran'];
+  const headers = ['No', 'Nama Siswa', 'Kelas', 'Tipe', 'Alasan', 'Tanggal', 'Waktu', 'Kembali', 'Durasi (menit)', 'Status', 'Disetujui Oleh', 'Tahun Ajaran'];
 
   const rows = permits.map((p, i) => [
     i + 1,
@@ -83,6 +83,8 @@ export function exportPermitsToCsv(
       ? new Date(p.returnTimestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
       : '-',
     calculateDurationMinutes(p),
+    resolvePermitStatus(p) === PermitStatus.APPROVED ? 'Disetujui' : 'Menunggu',
+    p.approvedBy || '-',
     p.tahunAjaran || '-',
   ]);
 

@@ -28,6 +28,8 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({ data, school, clas
 
   const isLate = data.type === PermitType.LATE_ENTRY;
   const title = isLate ? 'IZIN MASUK' : 'IZIN KELUAR';
+  const showPiketName = !(data as any).isSuperAdminApproved && data.approvedBy && data.approvedBy.toLowerCase() !== 'admin';
+  const piketNameDisplay = showPiketName ? data.approvedBy : "_________________";
   const nomorSurat = `${isLate ? 'IM' : 'IK'}/${new Date().getFullYear()}/${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 
   return (
@@ -96,7 +98,7 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({ data, school, clas
           </div>
           <div className="text-center w-1/2">
             <p className="mb-20 font-bold text-[18px]">Guru Piket</p>
-            <p className="font-bold text-[12px] underline">{"_________________"}</p>
+            <p className="font-bold text-[12px] underline">{piketNameDisplay}</p>
           </div>
         </div>
       ) : (
@@ -106,7 +108,7 @@ export const PrintTemplate: React.FC<PrintTemplateProps> = ({ data, school, clas
           <div className="flex justify-between mt-2">
             <div className="text-center w-1/2">
               <p className="mb-20 font-bold text-[18px]">Guru Piket</p>
-              <p className="font-bold text-[12px] underline">{"_________________"}</p>
+              <p className="font-bold text-[12px] underline">{piketNameDisplay}</p>
             </div>
             <div className="text-center w-1/2">
               <p className="mb-20 font-bold text-[18px]">Guru Kelas/UKS</p>

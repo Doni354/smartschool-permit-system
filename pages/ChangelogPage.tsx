@@ -12,6 +12,20 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '3.0',
+    date: '10 Juni 2026',
+    title: 'Sistem Approval & Keamanan Lanjut',
+    type: 'major',
+    changes: [
+      'Sistem persetujuan admin untuk izin masuk & keluar',
+      'Integrasi Firebase Cloud Functions untuk manajemen admin yang aman',
+      'Dukungan role-based access control (Super Admin vs Admin Piket)',
+      'Label status visual (Disetujui/Menunggu) di Dashboard Admin',
+      'Format tanda tangan dinamis pada struk PDF sesuai wewenang user',
+      'Peningkatan ekspor XLSX dan CSV dengan log approval'
+    ],
+  },
+  {
     version: '2.0',
     date: '14 Mei 2026',
     title: 'Fitur Baru & Enhancement Besar',

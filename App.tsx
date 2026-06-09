@@ -9,6 +9,8 @@ import { GuidePage } from './pages/GuidePage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { PrintPreviewPage } from './pages/PrintPreviewPage';
 import { auth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from './firebase';
+import { getAdminProfile } from './services/authService';
+import { initializeSuperAdmins } from './init-super-admins';
 import { Lock, AlertCircle, Loader2 } from 'lucide-react';
 
 // -- Login Page --
@@ -25,12 +27,24 @@ const LoginPage: React.FC<{ onLoginSuccess: (user: User) => void }> = ({ onLogin
     setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Fetch admin profile from Firestore to get role
+      const adminProfile = await getAdminProfile(cred.user.uid);
+      
+      if (!adminProfile) {
+        // User exists in Auth but not in admins collection → not authorized
+        await signOut(auth);
+        setError('Akun tidak terdaftar sebagai admin. Hubungi Super Admin.');
+        setLoading(false);
+        return;
+      }
+
       onLoginSuccess({
         id: cred.user.uid,
-        name: cred.user.displayName || 'Admin',
+        name: adminProfile.name || cred.user.displayName || 'Admin',
         email: cred.user.email || '',
-        role: 'ADMIN',
-        schoolId: DEMO_SCHOOLS[0].id,
+        role: adminProfile.role,
+        schoolId: adminProfile.schoolId || DEMO_SCHOOLS[0].id,
       });
       navigate('/admin');
     } catch (err: any) {
@@ -106,15 +120,24 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setCurrentUser({
-          id: firebaseUser.uid,
-          name: firebaseUser.displayName || 'Admin',
-          email: firebaseUser.email || '',
-          role: 'ADMIN',
-          schoolId: DEMO_SCHOOLS[0].id,
-        });
+        // Fetch admin profile to get role
+        const adminProfile = await getAdminProfile(firebaseUser.uid);
+        if (adminProfile) {
+          setCurrentUser({
+            id: firebaseUser.uid,
+            name: adminProfile.name || firebaseUser.displayName || 'Admin',
+            email: firebaseUser.email || '',
+            role: adminProfile.role,
+            schoolId: adminProfile.schoolId || DEMO_SCHOOLS[0].id,
+          });
+        } else {
+          // Not an admin — sign out
+          await signOut(auth);
+          setCurrentUser(null);
+        }
       } else {
         setCurrentUser(null);
       }
