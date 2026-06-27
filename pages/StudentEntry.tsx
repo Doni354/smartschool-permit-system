@@ -4,7 +4,7 @@ import { SchoolProfile, PermitType, PermitStatus } from '../types';
 import { ClassPicker } from '../components/ClassPicker';
 import { NameAutocomplete } from '../components/NameAutocomplete';
 import { getTahunAjaran } from '../utils/school';
-import { createPermit, getPermitsBySchool } from '../services/permitService';
+import { createPermit, getStudentNamesBySchool } from '../services/permitService';
 import { Clock, CheckCircle, AlertCircle, ArrowLeft, Send, FileText, Users } from 'lucide-react';
 import { VersionFooter } from '../components/VersionFooter';
 
@@ -26,13 +26,10 @@ export const StudentEntry: React.FC<StudentEntryProps> = ({ schools }) => {
   const [classError, setClassError] = useState(false);
   const [existingNames, setExistingNames] = useState<string[]>([]);
 
-  // Load existing student names for autocomplete
+  // Load existing student names for autocomplete (optimized: only names, capped at 200 docs)
   useEffect(() => {
-    getPermitsBySchool(selectedSchoolId)
-      .then(permits => {
-        const unique = Array.from(new Set(permits.map(p => p.studentName).filter(Boolean)));
-        setExistingNames(unique.sort());
-      })
+    getStudentNamesBySchool(selectedSchoolId)
+      .then(names => setExistingNames(names))
       .catch(() => {}); // silently fail if no access
   }, [selectedSchoolId]);
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SchoolProfile, StudentPermit, PermitType } from '../types';
-import { getPermitsBySchool } from '../services/permitService';
-import { GRADES, GRADE_LETTERS } from '../utils/school';
+import { getPermitsBySchoolTA } from '../services/permitService';
+import { GRADES, GRADE_LETTERS, getTahunAjaran } from '../utils/school';
 import { Search, Users, Clock, AlertCircle, ChevronDown, FileText, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Pagination } from '../components/Pagination';
@@ -24,8 +24,10 @@ export const StudentRecords: React.FC<StudentRecordsProps> = ({ schools }) => {
   const [gradeFilter, setGradeFilter] = useState('');
   const [letterFilter, setLetterFilter] = useState('');
 
+  // Optimized: fetch only current Tahun Ajaran
   useEffect(() => {
-    getPermitsBySchool(school.id)
+    const currentTA = getTahunAjaran(Date.now());
+    getPermitsBySchoolTA(school.id, currentTA)
       .then(data => setPermits(data))
       .catch(() => {})
       .finally(() => setLoading(false));

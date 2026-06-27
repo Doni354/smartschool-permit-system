@@ -1,4 +1,4 @@
-import { db, collection, addDoc, query, where, getDocs, getDoc, doc, deleteDoc, updateDoc } from '../firebase';
+import { db, collection, addDoc, query, where, getDocs, getDoc, doc, deleteDoc, updateDoc, orderBy, limit, onSnapshot } from '../firebase';
 import { StudentPermit, PermitType, PermitStatus, User } from '../types';
 
 const PERMITS_COLLECTION = 'permits';
@@ -92,6 +92,83 @@ export const getPermitsBySchool = async (schoolId: string, type?: PermitType): P
     }
     return [];
   }
+};
+
+/**
+ * Optimized: Fetch permits filtered by Tahun Ajaran at Firestore query level.
+ * Reduces reads from ~900 to ~200-300.
+ * Requires composite index: schoolId (ASC) + tahunAjaran (ASC) + timestamp (DESC)
+ */
+export const getPermitsBySchoolTA = async (schoolId: string, tahunAjaran: string): Promise<StudentPermit[]> => {
+  try {
+    const q = query(
+      collection(db, PERMITS_COLLECTION),
+      where('schoolId', '==', schoolId),
+      where('tahunAjaran', '==', tahunAjaran),
+      orderBy('timestamp', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentPermit));
+  } catch (error) {
+    console.warn("getPermitsBySchoolTA failed, falling back to full fetch", error);
+    // Fallback: fetch all and filter client-side (in case index is not yet created)
+    const all = await getPermitsBySchool(schoolId);
+    return all.filter(p => (p.tahunAjaran || '') === tahunAjaran);
+  }
+};
+
+/**
+ * Optimized: Fetch only student names for autocomplete.
+ * Caps at 200 most recent docs to minimize reads.
+ */
+export const getStudentNamesBySchool = async (schoolId: string): Promise<string[]> => {
+  try {
+    const q = query(
+      collection(db, PERMITS_COLLECTION),
+      where('schoolId', '==', schoolId),
+      orderBy('timestamp', 'desc'),
+      limit(200)
+    );
+    const snapshot = await getDocs(q);
+    const names = new Set<string>();
+    snapshot.docs.forEach(doc => {
+      const name = doc.data().studentName;
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort();
+  } catch (error) {
+    console.warn("getStudentNamesBySchool failed", error);
+    return [];
+  }
+};
+
+/**
+ * Real-time listener for permits by school + tahun ajaran.
+ * Returns an unsubscribe function. Avoids re-fetching after mutations.
+ */
+export const onPermitsSnapshot = (
+  schoolId: string,
+  tahunAjaran: string,
+  callback: (permits: StudentPermit[]) => void,
+  onError?: (error: Error) => void
+): (() => void) => {
+  const q = query(
+    collection(db, PERMITS_COLLECTION),
+    where('schoolId', '==', schoolId),
+    where('tahunAjaran', '==', tahunAjaran),
+    orderBy('timestamp', 'desc')
+  );
+
+  return onSnapshot(q,
+    (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentPermit));
+      callback(data);
+    },
+    (error) => {
+      console.error("onPermitsSnapshot error:", error);
+      if (onError) onError(error as Error);
+    }
+  );
 };
 
 export const deletePermit = async (id: string): Promise<void> => {

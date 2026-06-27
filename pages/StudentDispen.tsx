@@ -4,7 +4,7 @@ import { SchoolProfile, PermitType, PermitStatus } from '../types';
 import { ClassPicker } from '../components/ClassPicker';
 import { NameAutocomplete } from '../components/NameAutocomplete';
 import { getTahunAjaran } from '../utils/school';
-import { createPermit, getPermitsBySchool } from '../services/permitService';
+import { createPermit, getStudentNamesBySchool } from '../services/permitService';
 import { FileText, CheckCircle, AlertCircle, ArrowLeft, Send, Clock, Users } from 'lucide-react';
 import { VersionFooter } from '../components/VersionFooter';
 
@@ -25,12 +25,10 @@ export const StudentDispen: React.FC<StudentDispenProps> = ({ schools }) => {
   const [classError, setClassError] = useState(false);
   const [existingNames, setExistingNames] = useState<string[]>([]);
 
+  // Optimized: fetch only names, capped at 200 docs
   useEffect(() => {
-    getPermitsBySchool(selectedSchoolId)
-      .then(permits => {
-        const unique = Array.from(new Set(permits.map(p => p.studentName).filter(Boolean)));
-        setExistingNames(unique.sort());
-      })
+    getStudentNamesBySchool(selectedSchoolId)
+      .then(names => setExistingNames(names))
       .catch(() => {});
   }, [selectedSchoolId]);
 

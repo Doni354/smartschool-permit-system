@@ -9,7 +9,7 @@ import { LateEntries } from './admin/LateEntries';
 import { ExitPermits } from './admin/ExitPermits';
 import { Reports } from './admin/Reports';
 import { ManageAdmins } from './admin/ManageAdmins';
-import { getPermitsBySchool, createPermit, deletePermit, updatePermit, approvePermit } from '../services/permitService';
+import { createPermit, deletePermit, updatePermit, approvePermit, onPermitsSnapshot } from '../services/permitService';
 import { getTahunAjaran } from '../utils/school';
 import { CheckCircle, X, Loader2, Menu } from 'lucide-react';
 
@@ -151,18 +151,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
   const [saving, setSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const data = await getPermitsBySchool(school.id);
-      setPermits(data);
-    } catch {
-      showToast('Gagal mengambil data', 'error');
-    }
-    setLoading(false);
-  };
+  const fetchData = () => {}; // no-op, snapshot handles updates
 
-  useEffect(() => { fetchData(); }, [school.id]);
+  useEffect(() => {
+    setLoading(true);
+    const currentTA = getTahunAjaran(Date.now());
+    const unsubscribe = onPermitsSnapshot(
+      school.id,
+      currentTA,
+      (data) => {
+        setPermits(data);
+        setLoading(false);
+      },
+      () => {
+        showToast('Gagal mengambil data', 'error');
+        setLoading(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [school.id]);
 
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
@@ -191,7 +198,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
     try {
       await deletePermit(id);
       showToast('Data dihapus', 'success');
-      fetchData();
     } catch {
       showToast('Gagal menghapus', 'error');
     }
@@ -202,7 +208,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
       const isSuper = (user as any).role === 'SUPER_ADMIN';
       await approvePermit(permit.id, user, isSuper);
       showToast(`Persetujuan ${permit.studentName} berhasil`, 'success');
-      fetchData();
     } catch (err: any) {
       console.error("Approve failed:", err);
       showToast(`Gagal menyetujui: ${err.message || 'Cek koneksi/akses'}`, 'error');
@@ -246,7 +251,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
         showToast('Surat izin dibuat', 'success');
       }
       setModalPermit(null);
-      fetchData();
     } catch {
       showToast('Terjadi kesalahan', 'error');
     }
