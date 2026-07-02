@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { StudentPermit, PermitType, PermitStatus, User, resolvePermitStatus } from '../../types';
 import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, FilePlus, AlertCircle, ChevronDown, Download, Clock, CheckCircle2, ShieldCheck } from 'lucide-react';
-import { getTahunAjaran, getAvailableTahunAjaran, GRADES, GRADE_LETTERS } from '../../utils/school';
+import { getTahunAjaran, GRADES, GRADE_LETTERS } from '../../utils/school';
 import { exportPermitsToXlsx } from '../../utils/xlsx-export';
 import { exportPermitsToCsv } from '../../utils/csv-export';
 import { Pagination } from '../../components/Pagination';
@@ -48,7 +48,6 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
   const [dateTo, setDateTo] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
   const [letterFilter, setLetterFilter] = useState('');
-  const [selectedTA, setSelectedTA] = useState('');
   const [showFilter, setShowFilter] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'' | 'PENDING' | 'APPROVED'>('');
 
@@ -58,14 +57,12 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
   };
 
   const exitPermits = useMemo(() => permits.filter(p => p.type === PermitType.EXIT_PERMIT), [permits]);
-  const availableTA = useMemo(() => getAvailableTahunAjaran(exitPermits.map(p => p.timestamp)), [exitPermits]);
 
   // Count pending
   const pendingCount = useMemo(() => exitPermits.filter(p => resolvePermitStatus(p) === PermitStatus.PENDING).length, [exitPermits]);
 
   const filtered = useMemo(() => {
     let data = exitPermits;
-    if (selectedTA) data = data.filter(p => resolveTahunAjaran(p) === selectedTA);
     if (statusFilter) data = data.filter(p => resolvePermitStatus(p) === statusFilter);
     if (gradeFilter && letterFilter) data = data.filter(p => p.className === `${gradeFilter}-${letterFilter}`);
     else if (gradeFilter) data = data.filter(p => p.className.startsWith(gradeFilter + '-'));
@@ -87,14 +84,14 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
       data = data.filter(p => p.timestamp <= to.getTime());
     }
     return data;
-  }, [exitPermits, search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA, statusFilter]);
+  }, [exitPermits, search, dateFrom, dateTo, gradeFilter, letterFilter, statusFilter]);
 
-  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setSelectedTA(''); setStatusFilter(''); };
-  const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || selectedTA || statusFilter;
+  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setStatusFilter(''); };
+  const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || statusFilter;
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA, statusFilter]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, statusFilter]);
   const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page, perPage]);
 
   return (
@@ -183,17 +180,6 @@ export const ExitPermits: React.FC<ExitPermitsProps> = ({ permits, loading, onPr
 
           <div className="w-px h-5 bg-slate-200 hidden sm:block" />
 
-          <div className="relative">
-            <select
-              className="appearance-none bg-slate-100 rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
-              value={selectedTA}
-              onChange={e => setSelectedTA(e.target.value)}
-            >
-              <option value="">Semua TA</option>
-              {availableTA.map(ta => <option key={ta} value={ta}>TA {ta}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
           <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
             <button onClick={() => handleGradeSelect('')}
               className={`px-2.5 py-1 text-xs rounded-md font-semibold transition-all ${gradeFilter === '' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Semua</button>

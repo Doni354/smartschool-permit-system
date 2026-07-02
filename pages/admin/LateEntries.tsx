@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { StudentPermit, PermitType, PermitStatus, resolvePermitStatus } from '../../types';
 import { Search, Printer, Pencil, Trash2, X, Calendar, Filter, AlertCircle, ChevronDown, Download, Clock, CheckCircle } from 'lucide-react';
-import { getTahunAjaran, getAvailableTahunAjaran, GRADES, GRADE_LETTERS } from '../../utils/school';
+import { GRADES, GRADE_LETTERS } from '../../utils/school';
 import { exportPermitsToXlsx } from '../../utils/xlsx-export';
 import { exportPermitsToCsv } from '../../utils/csv-export';
 import { Pagination } from '../../components/Pagination';
@@ -20,9 +20,7 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 }
 
-function resolveTahunAjaran(p: StudentPermit) {
-  return p.tahunAjaran || getTahunAjaran(p.timestamp);
-}
+
 
 export const LateEntries: React.FC<LateEntriesProps> = ({ permits, loading, onPrint, onEdit, onDelete, onApprove }) => {
   const [search, setSearch] = useState('');
@@ -30,7 +28,7 @@ export const LateEntries: React.FC<LateEntriesProps> = ({ permits, loading, onPr
   const [dateTo, setDateTo] = useState('');
   const [gradeFilter, setGradeFilter] = useState('');
   const [letterFilter, setLetterFilter] = useState('');
-  const [selectedTA, setSelectedTA] = useState('');
+
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showFilter, setShowFilter] = useState(false);
 
@@ -40,11 +38,9 @@ export const LateEntries: React.FC<LateEntriesProps> = ({ permits, loading, onPr
   };
 
   const latePermits = useMemo(() => permits.filter(p => p.type === PermitType.LATE_ENTRY), [permits]);
-  const availableTA = useMemo(() => getAvailableTahunAjaran(latePermits.map(p => p.timestamp)), [latePermits]);
 
   const filtered = useMemo(() => {
     let data = latePermits;
-    if (selectedTA) data = data.filter(p => resolveTahunAjaran(p) === selectedTA);
     if (statusFilter) data = data.filter(p => resolvePermitStatus(p) === statusFilter);
     if (gradeFilter && letterFilter) data = data.filter(p => p.className === `${gradeFilter}-${letterFilter}`);
     else if (gradeFilter) data = data.filter(p => p.className.startsWith(gradeFilter + '-'));
@@ -65,14 +61,14 @@ export const LateEntries: React.FC<LateEntriesProps> = ({ permits, loading, onPr
       data = data.filter(p => p.timestamp <= to.getTime());
     }
     return data;
-  }, [latePermits, search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA, statusFilter]);
+  }, [latePermits, search, dateFrom, dateTo, gradeFilter, letterFilter, statusFilter]);
 
-  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setSelectedTA(''); setStatusFilter(''); };
-  const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || selectedTA || statusFilter;
+  const clearFilters = () => { setSearch(''); setDateFrom(''); setDateTo(''); setGradeFilter(''); setLetterFilter(''); setStatusFilter(''); };
+  const hasFilter = search || dateFrom || dateTo || gradeFilter || letterFilter || statusFilter;
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, selectedTA, statusFilter]);
+  useEffect(() => { setPage(1); }, [search, dateFrom, dateTo, gradeFilter, letterFilter, statusFilter]);
   const paginated = useMemo(() => filtered.slice((page - 1) * perPage, page * perPage), [filtered, page, perPage]);
 
   return (
@@ -99,17 +95,6 @@ export const LateEntries: React.FC<LateEntriesProps> = ({ permits, loading, onPr
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative">
-            <select
-              className="appearance-none bg-slate-100 rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"
-              value={selectedTA}
-              onChange={e => setSelectedTA(e.target.value)}
-            >
-              <option value="">Semua TA</option>
-              {availableTA.map(ta => <option key={ta} value={ta}>TA {ta}</option>)}
-            </select>
-            <ChevronDown size={12} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
           <div className="relative">
             <select
               className="appearance-none bg-slate-100 rounded-lg pl-3 pr-7 py-1.5 text-xs font-semibold text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-blue-500"

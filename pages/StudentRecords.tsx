@@ -24,14 +24,29 @@ export const StudentRecords: React.FC<StudentRecordsProps> = ({ schools }) => {
   const [gradeFilter, setGradeFilter] = useState('');
   const [letterFilter, setLetterFilter] = useState('');
 
-  // Optimized: fetch only current Tahun Ajaran
+  // TA selector
+  const currentTA = getTahunAjaran(Date.now());
+  const [selectedTA, setSelectedTA] = useState(currentTA);
+  const taOptions = (() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const startYear = month >= 6 ? year : year - 1;
+    return [
+      `${startYear}/${startYear + 1}`,
+      `${startYear - 1}/${startYear}`,
+      `${startYear - 2}/${startYear - 1}`,
+    ];
+  })();
+
+  // Fetch permits for selected Tahun Ajaran
   useEffect(() => {
-    const currentTA = getTahunAjaran(Date.now());
-    getPermitsBySchoolTA(school.id, currentTA)
+    setLoading(true);
+    getPermitsBySchoolTA(school.id, selectedTA)
       .then(data => setPermits(data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [school.id]);
+  }, [school.id, selectedTA]);
 
   const handleGradeSelect = (g: string) => { setGradeFilter(g); setLetterFilter(''); };
 
@@ -89,6 +104,18 @@ export const StudentRecords: React.FC<StudentRecordsProps> = ({ schools }) => {
             <div>
               <h1 className="text-xl font-bold">Rekap Data Siswa</h1>
               <p className="text-slate-400 text-sm">{school.name}</p>
+            </div>
+            <div className="ml-auto relative">
+              <select
+                className="appearance-none bg-white/10 backdrop-blur border-0 rounded-lg pl-3 pr-8 py-2 text-sm font-semibold text-white focus:ring-2 focus:ring-blue-400 outline-none cursor-pointer"
+                value={selectedTA}
+                onChange={e => setSelectedTA(e.target.value)}
+              >
+                {taOptions.map(ta => (
+                  <option key={ta} value={ta} className="text-slate-800">TA {ta}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" />
             </div>
           </div>
 

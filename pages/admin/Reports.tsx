@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { StudentPermit, PermitType } from '../../types';
 import { Award, Users, BarChart2, TrendingUp, AlertCircle, ChevronDown, Search, AlertTriangle, Download, Calendar } from 'lucide-react';
-import { getTahunAjaran, getAvailableTahunAjaran, ALL_CLASSES, GRADES, GRADE_LETTERS } from '../../utils/school';
+import { getTahunAjaran, ALL_CLASSES, GRADES, GRADE_LETTERS } from '../../utils/school';
 import { exportPermitsToXlsx, exportSummaryToXlsx } from '../../utils/xlsx-export';
 import { exportPermitsToCsv, exportSummaryToCsv } from '../../utils/csv-export';
 import { Pagination } from '../../components/Pagination';
@@ -11,14 +11,12 @@ interface ReportsProps {
   loading: boolean;
   onEdit: (permit: StudentPermit) => void;
   onDelete: (id: string) => void;
+  selectedTA: string;
 }
 
 const MONTHS_ID = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-// Normalize tahun ajaran: use stored field or derive from timestamp
-function resolveTahunAjaran(p: StudentPermit) {
-  return p.tahunAjaran || getTahunAjaran(p.timestamp);
-}
+
 
 // --- Monthly Rekapitulasi Sub-Component ---
 const MonthlyRecap: React.FC<{ permits: StudentPermit[]; selectedTA: string }> = ({ permits, selectedTA }) => {
@@ -233,9 +231,7 @@ const MonthlyRecap: React.FC<{ permits: StudentPermit[]; selectedTA: string }> =
   );
 };
 
-export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
-  const currentTA = getTahunAjaran(Date.now());
-  const [selectedTA, setSelectedTA] = useState(currentTA);
+export const Reports: React.FC<ReportsProps> = ({ permits, loading, selectedTA }) => {
   const [topType, setTopType] = useState<'all' | 'late' | 'exit'>('all');
   const [gradeFilter, setGradeFilter] = useState<string>('');
   const [letterFilter, setLetterFilter] = useState<string>('');
@@ -252,10 +248,8 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
     return true;
   };
 
-  const availableTA = useMemo(() => getAvailableTahunAjaran(permits.map(p => p.timestamp)), [permits]);
-
-  // --- Permits filtered by tahun ajaran ---
-  const taPermits = useMemo(() => permits.filter(p => resolveTahunAjaran(p) === selectedTA), [permits, selectedTA]);
+  // --- Permits are already filtered by TA at Firestore query level ---
+  const taPermits = permits;
 
   // --- Top Students (filtered by TA + gradeFilter + topType) ---
   const studentFrequency = useMemo(() => {
@@ -365,24 +359,10 @@ export const Reports: React.FC<ReportsProps> = ({ permits, loading }) => {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* Global filter bar: Tahun Ajaran + Grade */}
+      {/* Global filter bar: Grade */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-center gap-3">
         <BarChart2 size={16} className="text-slate-400 shrink-0" />
         <span className="text-sm font-semibold text-slate-700 shrink-0">Filter:</span>
-
-        {/* Tahun Ajaran */}
-        <div className="relative">
-          <select
-            className="appearance-none bg-slate-100 border-0 rounded-lg pl-3 pr-8 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-            value={selectedTA}
-            onChange={e => setSelectedTA(e.target.value)}
-          >
-            {availableTA.map(ta => (
-              <option key={ta} value={ta}>TA {ta}</option>
-            ))}
-          </select>
-          <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
 
         {/* Grade filter */}
         <div className="flex gap-1 bg-slate-100 rounded-lg p-1">

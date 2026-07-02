@@ -11,7 +11,21 @@ import { Reports } from './admin/Reports';
 import { ManageAdmins } from './admin/ManageAdmins';
 import { createPermit, deletePermit, updatePermit, approvePermit, onPermitsSnapshot } from '../services/permitService';
 import { getTahunAjaran } from '../utils/school';
-import { CheckCircle, X, Loader2, Menu } from 'lucide-react';
+import { CheckCircle, X, Loader2, Menu, ChevronDown } from 'lucide-react';
+
+/** Generate a list of recent Tahun Ajaran options (current + 2 previous). */
+function getRecentTAOptions(): string[] {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  // Current TA start year
+  const startYear = month >= 6 ? year : year - 1;
+  return [
+    `${startYear}/${startYear + 1}`,
+    `${startYear - 1}/${startYear}`,
+    `${startYear - 2}/${startYear - 1}`,
+  ];
+}
 
 interface AdminDashboardProps {
   user: User;
@@ -151,14 +165,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
   const [saving, setSaving] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Tahun Ajaran selector — allows viewing data from previous academic years
+  const currentTA = getTahunAjaran(Date.now());
+  const [selectedTA, setSelectedTA] = useState(currentTA);
+  const taOptions = getRecentTAOptions();
+
   const fetchData = () => {}; // no-op, snapshot handles updates
 
   useEffect(() => {
     setLoading(true);
-    const currentTA = getTahunAjaran(Date.now());
     const unsubscribe = onPermitsSnapshot(
       school.id,
-      currentTA,
+      selectedTA,
       (data) => {
         setPermits(data);
         setLoading(false);
@@ -169,7 +187,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
       }
     );
     return () => unsubscribe();
-  }, [school.id]);
+  }, [school.id, selectedTA]);
 
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
@@ -282,6 +300,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
             <h1 className="text-base sm:text-lg font-bold text-slate-900 truncate">{title}</h1>
             <p className="text-xs text-slate-500 truncate hidden sm:block">{subtitle}</p>
           </div>
+          {/* Tahun Ajaran selector */}
+          <div className="relative shrink-0">
+            <select
+              className="appearance-none bg-slate-100 border-0 rounded-lg pl-3 pr-8 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+              value={selectedTA}
+              onChange={e => setSelectedTA(e.target.value)}
+            >
+              {taOptions.map(ta => (
+                <option key={ta} value={ta}>TA {ta}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Routes>
@@ -308,6 +339,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, school, on
               <Reports permits={permits} loading={loading}
                 onEdit={(p) => setModalPermit(p)}
                 onDelete={handleDelete}
+                selectedTA={selectedTA}
               />
             } />
             <Route path="manage-admins" element={
