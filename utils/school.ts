@@ -30,7 +30,7 @@ export function getAvailableTahunAjaran(timestamps: number[]): string[] {
 
 // -- Kelas options --
 export const GRADE_LETTERS: Record<string, string[]> = {
-  'X':   ['A','B','C','D','E','F','G','H','I','J'],
+  'X':   ['A','B','C','D','E','F','G','H','I','J','K'],
   'XI':  ['A','B','C','D','E','F','G','H','I','J','K'],
   'XII': ['A','B','C','D','E','F','G','H','I','J','K'],
 };
