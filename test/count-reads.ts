@@ -8,7 +8,7 @@
  */
 
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, query, where, getDocs, getDoc, doc, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, getDoc, doc, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB9L6LOrxcnDZov4xEH522MZEqOtmTXfmg",
@@ -177,6 +177,26 @@ async function runTests() {
     const snap = await getDocs(q);
     console.log(`   ❌ Reads TANPA filter TA: ${snap.size} docs (SEMUA DATA!)`);
     results.push({ page: 'DEPRECATED fallback', fungsi: 'getPermitsBySchool() ALL', reads: snap.size, note: '🔴 SEMUA data tanpa filter!' });
+  }
+  console.log('');
+
+  // ============================================================
+  // TEST 9: Hitung Total Data Per Tahun via getCountFromServer()
+  // ============================================================
+  console.log('📄 TEST 9: ⚡ Hitung Total Data Per Tahun Ajaran');
+  const test3Result = results.find(r => r.fungsi === 'getPermitsBySchoolTA()');
+  const oldReads = test3Result ? test3Result.reads : 1281;
+  console.log(`   Metode LAMA: getDocs(TA) -> snap.size / array.length (${oldReads} docs)`);
+  {
+    const q = query(
+      collection(db, PERMITS),
+      where('schoolId', '==', SCHOOL_ID),
+      where('tahunAjaran', '==', TA)
+    );
+    const countSnap = await getCountFromServer(q);
+    console.log(`   ✅ Reads BARU (getCountFromServer): 1 READ server! (hasil: ${countSnap.data().count} data)`);
+    results.push({ page: 'Hitung Total TA (LAMA)', fungsi: 'getDocs().size', reads: oldReads, note: 'baca semua dokumen' });
+    results.push({ page: 'Hitung Total TA (OPTIMAL)', fungsi: 'getCountFromServer()', reads: 1, note: 'server-side aggregation: 1 read!' });
   }
   console.log('');
 

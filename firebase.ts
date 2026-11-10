@@ -1,5 +1,25 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, limit, onSnapshot } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  collection,
+  addDoc,
+  query,
+  where,
+  getDocs,
+  getDoc,
+  getCountFromServer,
+  orderBy,
+  Timestamp,
+  serverTimestamp,
+  doc,
+  deleteDoc,
+  updateDoc,
+  setDoc,
+  limit,
+  onSnapshot
+} from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -15,7 +35,14 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+// Initialize Firestore with offline multi-tab IndexedDB persistence to minimize reads on page reloads/tab visits
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
+
 export const auth = getAuth(app);
 export const functions = getFunctions(app);
 
@@ -24,7 +51,7 @@ const secondaryApp = initializeApp(firebaseConfig, "secondary");
 export const secondaryAuth = getAuth(secondaryApp);
 
 // Export Firestore functions for use in services
-export { collection, addDoc, query, where, getDocs, getDoc, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, limit, onSnapshot };
+export { collection, addDoc, query, where, getDocs, getDoc, getCountFromServer, orderBy, Timestamp, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, limit, onSnapshot };
 // Export Auth functions
 export { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, sendPasswordResetEmail, updateProfile };
 // Export Functions
